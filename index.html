@@ -94,17 +94,8 @@
       100%{ background-position: 0 0; }
     }
 
-    /* ─── Scroll Reveals ─────────────────────────────────────────────── */
-    .reveal {
-      opacity: 0;
-      transform: translateY(28px);
-      transition: opacity 700ms var(--ease-out), transform 700ms var(--ease-out);
-    }
-    .reveal.visible { opacity: 1; transform: none; }
-    .reveal-d1 { transition-delay: 100ms; }
-    .reveal-d2 { transition-delay: 220ms; }
-    .reveal-d3 { transition-delay: 340ms; }
-    .reveal-d4 { transition-delay: 460ms; }
+    /* ─── Reveal: initial hidden state (Motion.dev animates these) ─────── */
+    .reveal { opacity: 0; }
 
     /* ─── Shared Layout ──────────────────────────────────────────────── */
     .section-container {
@@ -1512,9 +1503,9 @@
       <h2 class="reveal reveal-d1">One event. One price.<br>No subscriptions.</h2>
       <p class="pricing__sub reveal reveal-d2">Pay once per event. Keep your photos forever.</p>
 
-      <div class="tier-grid reveal reveal-d2">
+      <div class="tier-grid">
 
-        <div class="tier">
+        <div class="tier reveal">
           <p class="tier__name">Snapshot</p>
           <div class="tier__price"><span class="tier__currency">$</span>0</div>
           <p class="tier__cadence">Free forever</p>
@@ -1528,7 +1519,7 @@
           <a class="btn btn--outline btn--full" href="#">Start Free</a>
         </div>
 
-        <div class="tier tier--featured">
+        <div class="tier tier--featured reveal">
           <p class="tier__badge">Most popular</p>
           <p class="tier__name">Ceremony</p>
           <div class="tier__price"><span class="tier__currency">$</span>19</div>
@@ -1544,7 +1535,7 @@
           <a class="btn btn--primary btn--full" href="#">Create Your Event</a>
         </div>
 
-        <div class="tier">
+        <div class="tier reveal">
           <p class="tier__name">Archive</p>
           <div class="tier__price"><span class="tier__currency">$</span>49</div>
           <p class="tier__cadence">per event</p>
@@ -1584,7 +1575,7 @@
   <!-- ═══════════════════════════════════════════════════════════════ -->
   <!-- FOOTER                                                          -->
   <!-- ═══════════════════════════════════════════════════════════════ -->
-  <footer class="footer">
+  <footer class="footer reveal">
     <div class="footer__inner">
       <a class="footer__logo" href="#">Onion</a>
       <nav class="footer__nav" aria-label="Footer navigation">
@@ -1639,20 +1630,6 @@
         }
         el.style.boxShadow = shadows.join(', ');
       });
-    })();
-
-    // ─── Scroll Reveals ────────────────────────────────────────────────
-    (function initReveal() {
-      const io = new IntersectionObserver(
-        entries => entries.forEach(e => {
-          if (e.isIntersecting) {
-            e.target.classList.add('visible');
-            io.unobserve(e.target);
-          }
-        }),
-        { threshold: 0.1, rootMargin: '0px 0px -32px 0px' }
-      );
-      document.querySelectorAll('.reveal').forEach(el => io.observe(el));
     })();
 
     // ─── Nav Scroll ────────────────────────────────────────────────────
@@ -1760,6 +1737,172 @@
         el.scrollLeft = touchScrollLeft - (x - touchStartX) * 1.2;
       }, { passive: true });
     })();
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- MOTION ANIMATIONS                                               -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <script type="module">
+    import { animate, scroll, inView, stagger }
+      from 'https://cdn.jsdelivr.net/npm/motion@11/+esm';
+
+    const ease = [0.16, 1, 0.3, 1];
+
+    // Fire callback once when el enters view, then stop observing
+    function onceInView(el, cb, margin) {
+      if (!el) return;
+      const stop = inView(el, () => { cb(); stop(); },
+        { margin: margin || '0px 0px -48px 0px' });
+    }
+
+    // ── LOAD: Hero – staggered entrance on page load ──────────────────
+    const heroReveal = document.querySelectorAll('.hero .reveal');
+    if (heroReveal.length) {
+      animate(heroReveal, { opacity: [0, 1], y: [36, 0] }, {
+        duration: 0.9,
+        easing: ease,
+        delay: stagger(0.13, { start: 0.35 }),
+      });
+    }
+
+    // ── SCROLL: Hero – parallax drift as section leaves viewport ─────
+    const heroEl      = document.querySelector('#hero');
+    const heroContent = document.querySelector('.hero__content');
+    if (heroEl && heroContent) {
+      scroll(animate(heroContent, { y: [0, 90] }), {
+        target: heroEl,
+        offset: ['start start', 'end start'],
+      });
+    }
+
+    // ── SCROLL: Problem – blockquote scale-reveal ─────────────────────
+    const blockquote = document.querySelector('.problem__blockquote');
+    onceInView(blockquote, () => {
+      animate(blockquote, { opacity: [0, 1], y: [60, 0], scale: [0.96, 1] },
+        { duration: 1.0, easing: ease });
+    });
+
+    // Problem body – slide in from left, staggered
+    const problemBody = document.querySelector('.problem__body');
+    onceInView(problemBody, () => {
+      const kids = problemBody.querySelectorAll('.reveal');
+      animate(kids, { opacity: [0, 1], x: [-28, 0] },
+        { duration: 0.85, easing: ease, delay: stagger(0.16) });
+    });
+
+    // Stats – rise up, staggered
+    const problemStats = document.querySelector('.problem__stats');
+    onceInView(problemStats, () => {
+      const stats = problemStats.querySelectorAll('.stat');
+      animate(stats, { opacity: [0, 1], y: [48, 0] },
+        { duration: 0.8, easing: ease, delay: stagger(0.11) });
+    });
+
+    // ── SCROLL: Roles ─────────────────────────────────────────────────
+    const rolesHeader = document.querySelector('.roles__header');
+    onceInView(rolesHeader, () => {
+      animate(rolesHeader, { opacity: [0, 1], y: [40, 0] },
+        { duration: 0.9, easing: ease });
+    });
+
+    // Phone mockup – slide in from left
+    const phoneMockup = document.querySelector('.phone-mockup');
+    onceInView(phoneMockup, () => {
+      animate(phoneMockup, { opacity: [0, 1], x: [-52, 0] },
+        { duration: 1.0, easing: ease });
+    }, '0px 0px -32px 0px');
+
+    // Callouts – slide in from right, staggered
+    const rolesCallouts = document.querySelector('.roles__callouts');
+    onceInView(rolesCallouts, () => {
+      const callouts = rolesCallouts.querySelectorAll('.callout');
+      animate(callouts, { opacity: [0, 1], x: [52, 0] },
+        { duration: 0.85, easing: ease, delay: stagger(0.13) });
+    });
+
+    // ── SCROLL: How It Works ──────────────────────────────────────────
+    const howEl = document.querySelector('#how-it-works');
+    if (howEl) {
+      // Section heading
+      onceInView(howEl, () => {
+        const hdr = howEl.querySelectorAll('.eyebrow.reveal, h2.reveal');
+        animate(hdr, { opacity: [0, 1], y: [32, 0] },
+          { duration: 0.8, easing: ease, delay: stagger(0.12) });
+      }, '0px 0px -80px 0px');
+
+      // Steps – stagger upward
+      const stepsEl = howEl.querySelector('.steps');
+      onceInView(stepsEl, () => {
+        const steps = howEl.querySelectorAll('.step');
+        animate(steps, { opacity: [0, 1], y: [56, 0] },
+          { duration: 0.85, easing: ease, delay: stagger(0.1) });
+      });
+    }
+
+    // ── SCROLL: Use Cases ─────────────────────────────────────────────
+    const ucSection = document.querySelector('.usecases');
+    if (ucSection) {
+      onceInView(ucSection, () => {
+        const hdr = ucSection.querySelectorAll('.eyebrow.reveal, h2.reveal');
+        animate(hdr, { opacity: [0, 1], y: [32, 0] },
+          { duration: 0.8, easing: ease, delay: stagger(0.12) });
+      }, '0px 0px -80px 0px');
+    }
+
+    // ── SCROLL: Comparison ────────────────────────────────────────────
+    const compSection = document.querySelector('.comparison');
+    if (compSection) {
+      onceInView(compSection, () => {
+        const hdr = compSection.querySelectorAll('.eyebrow.reveal, h2.reveal');
+        animate(hdr, { opacity: [0, 1], y: [32, 0] },
+          { duration: 0.8, easing: ease, delay: stagger(0.12) });
+      }, '0px 0px -80px 0px');
+
+      const tableWrap = compSection.querySelector('.table-wrap');
+      onceInView(tableWrap, () => {
+        animate(tableWrap, { opacity: [0, 1], y: [40, 0], scale: [0.97, 1] },
+          { duration: 0.9, easing: ease });
+      });
+    }
+
+    // ── SCROLL: Pricing ───────────────────────────────────────────────
+    const pricingSection = document.querySelector('#pricing');
+    if (pricingSection) {
+      // Heading block
+      onceInView(pricingSection, () => {
+        const hdr = pricingSection.querySelectorAll(
+          '.eyebrow.reveal, h2.reveal, .pricing__sub.reveal'
+        );
+        animate(hdr, { opacity: [0, 1], y: [32, 0] },
+          { duration: 0.8, easing: ease, delay: stagger(0.12) });
+      }, '0px 0px -80px 0px');
+
+      // Tier cards – stagger rise, featured card gets a touch more lift
+      const tierGrid = pricingSection.querySelector('.tier-grid');
+      onceInView(tierGrid, () => {
+        const tiers = pricingSection.querySelectorAll('.tier');
+        animate(tiers, { opacity: [0, 1], y: [64, 0] },
+          { duration: 0.9, easing: ease, delay: stagger(0.12) });
+      });
+    }
+
+    // ── SCROLL: Footer CTA ────────────────────────────────────────────
+    const footerCta = document.querySelector('.footer-cta__inner');
+    if (footerCta) {
+      onceInView(footerCta, () => {
+        const els = footerCta.querySelectorAll('.reveal');
+        animate(els, { opacity: [0, 1], y: [40, 0] },
+          { duration: 0.85, easing: ease, delay: stagger(0.14) });
+      });
+    }
+
+    // ── SCROLL: Footer ────────────────────────────────────────────────
+    const footerEl = document.querySelector('.footer');
+    onceInView(footerEl, () => {
+      animate(footerEl, { opacity: [0, 1] },
+        { duration: 0.7, easing: ease });
+    }, '0px 0px 0px 0px');
+
   </script>
 
 </body>
