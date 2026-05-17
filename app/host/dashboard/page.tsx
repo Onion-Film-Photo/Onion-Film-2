@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/utils/supabase/client'
 import { getTier } from '@/lib/pricing'
 import { getFilter } from '@/lib/filters'
 import type { FilterId } from '@/lib/filters'
