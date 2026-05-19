@@ -64,7 +64,7 @@ export default function Pricing() {
               <ul className="tier__features">
                 {t.features.map(f => <li key={f}>{f}</li>)}
               </ul>
-              <a className={`btn ${t.cta.style} btn--full`} href="#">{t.cta.label}</a>
+              <a className={`btn ${t.cta.style} btn--full`} href="/host/signup">{t.cta.label}</a>
             </motion.div>
           ))}
         </motion.div>

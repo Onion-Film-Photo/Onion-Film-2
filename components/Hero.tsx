@@ -44,7 +44,7 @@ export default function Hero() {
             goes undocumented. No moment is left to chance.
           </motion.p>
           <motion.div className="hero__ctas" variants={item}>
-            <a className="btn btn--primary" href="#pricing">
+            <a className="btn btn--primary" href="/host/signup">
               Create Your Event
             </a>
             <a className="btn btn--ghost" href="#how-it-works">

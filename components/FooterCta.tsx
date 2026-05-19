@@ -27,7 +27,7 @@ export default function FooterCta() {
         <motion.h2 variants={stagger(0)}>
           Every layer of your event,<br /><em>finally visible.</em>
         </motion.h2>
-        <motion.a className="btn btn--primary" href="#pricing" variants={stagger(0.14)}>
+        <motion.a className="btn btn--primary" href="/host/signup" variants={stagger(0.14)}>
           Create Your Event — Free
         </motion.a>
         <motion.span className="footer-cta__footnote" variants={stagger(0.28)}>
