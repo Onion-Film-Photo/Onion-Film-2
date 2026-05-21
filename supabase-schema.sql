@@ -7,9 +7,12 @@ create table events (
   name            text not null,
   guest_limit     int not null check (guest_limit > 0),
   filter          text not null check (filter in ('natural','noir','golden_hour','dreamy','kodak_pop')),
-  shots_per_guest int not null default 10 check (shots_per_guest > 0),
-  qr_token        text unique not null,
-  status          text not null default 'active' check (status in ('active','ended')),
+  shots_per_guest      int  not null default 27 check (shots_per_guest > 0),
+  photo_visibility     text not null default 'after_event'
+                         check (photo_visibility in ('immediately','after_event','after_date')),
+  photo_visible_after  timestamptz,
+  qr_token             text unique not null,
+  status               text not null default 'active' check (status in ('active','ended')),
   created_at      timestamptz default now()
 );
 
