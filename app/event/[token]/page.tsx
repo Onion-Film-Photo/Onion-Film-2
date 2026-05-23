@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef, use } from 'react'
 import { getFilter } from '@/lib/filters'
 import type { FilterId } from '@/lib/filters'
+import type { PhotoVisibility } from '@/lib/visibility'
+import GuestGallery, { type GuestPhoto } from './GuestGallery'
 
 type Phase = 'identify' | 'camera' | 'full' | 'error'
 
@@ -16,18 +18,24 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
   const [idLoading, setIdLoading] = useState(false)
 
   // Camera phase
-  const [sessionId, setSessionId]       = useState('')
-  const [eventId, setEventId]           = useState('')
-  const [filterId, setFilterId]         = useState<FilterId>('natural')
-  const [shotsRemaining, setShotsRemaining] = useState(0)
-  const [shotsPerGuest, setShotsPerGuest]   = useState(0)
+  const [sessionId, setSessionId]             = useState('')
+  const [eventId, setEventId]                 = useState('')
+  const [filterId, setFilterId]               = useState<FilterId>('natural')
+  const [shotsRemaining, setShotsRemaining]   = useState(0)
+  const [shotsPerGuest, setShotsPerGuest]     = useState(0)
+
+  // Gallery & visibility
+  const [galleryPhotos, setGalleryPhotos]         = useState<GuestPhoto[]>([])
+  const [isVisible, setIsVisible]                 = useState(false)
+  const [photoVisibility, setPhotoVisibility]     = useState<PhotoVisibility>('after_event')
+  const [photoVisibleAfter, setPhotoVisibleAfter] = useState<string | null>(null)
 
   // Camera refs & state
   const videoRef     = useRef<HTMLVideoElement>(null)
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const streamRef    = useRef<MediaStream | null>(null)
-  const [capturing, setCapturing]   = useState(false)
-  const [flash, setFlash]           = useState(false)
+  const [capturing, setCapturing]     = useState(false)
+  const [flash, setFlash]             = useState(false)
   const [uploadError, setUploadError] = useState('')
 
   const filter = getFilter(filterId)
@@ -47,6 +55,23 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
       streamRef.current?.getTracks().forEach(t => t.stop())
     }
   }, [phase])
+
+  // Poll for photo reveal every 30s while photos are locked
+  useEffect(() => {
+    if (isVisible || !sessionId || (phase !== 'camera' && phase !== 'full')) return
+    const id = setInterval(() => fetchGallery(sessionId), 30_000)
+    return () => clearInterval(id)
+  }, [isVisible, phase, sessionId])
+
+  async function fetchGallery(sid: string) {
+    const res = await fetch(`/api/guest/photos?token=${token}&sessionId=${sid}`)
+    if (!res.ok) return
+    const data = await res.json()
+    setGalleryPhotos(data.photos)
+    setIsVisible(data.isVisible)
+    setPhotoVisibility(data.photoVisibility)
+    setPhotoVisibleAfter(data.photoVisibleAfter)
+  }
 
   async function handleIdentify(e: React.FormEvent) {
     e.preventDefault()
@@ -71,6 +96,13 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
     setFilterId(data.filter as FilterId)
     setShotsRemaining(data.shotsRemaining)
     setShotsPerGuest(data.shotsPerGuest)
+    setIsVisible(data.isVisible)
+    setPhotoVisibility(data.photoVisibility)
+    setPhotoVisibleAfter(data.photoVisibleAfter)
+
+    // Load existing photos (handles return visits)
+    await fetchGallery(data.sessionId)
+
     setPhase(data.shotsRemaining > 0 ? 'camera' : 'full')
     setIdLoading(false)
   }
@@ -85,7 +117,6 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
     setFlash(true)
     setTimeout(() => setFlash(false), 200)
 
-    // Draw frame to canvas with CSS filter converted to canvas composite
     canvas.width  = video.videoWidth
     canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')!
@@ -112,6 +143,9 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
 
       setShotsRemaining(data.shotsRemaining)
       if (data.shotsRemaining <= 0) setPhase('full')
+
+      // Refresh gallery to show the new shot
+      await fetchGallery(sessionId)
       setCapturing(false)
     }, 'image/jpeg', 0.88)
   }
@@ -143,7 +177,7 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
     )
   }
 
-  // ── Error / full phases ───────────────────────────────────────────────────
+  // ── Error phase ───────────────────────────────────────────────────────────
   if (phase === 'error') {
     return (
       <div className="guest-identify">
@@ -159,71 +193,94 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
     )
   }
 
+  // ── Full phase ────────────────────────────────────────────────────────────
   if (phase === 'full') {
     return (
-      <div className="guest-identify">
-        <div className="guest-identify__card">
-          <a className="auth-logo" href="/">Onion</a>
-          <div className="film-full-icon">🎞</div>
-          <h1 className="guest-identify__title">Film&apos;s full.</h1>
-          <p className="guest-identify__sub">
-            You&apos;ve used all {shotsPerGuest} of your shots. Your photos have been saved — the host will reveal them at the right moment.
-          </p>
+      <div className="guest-full">
+        <div className="guest-full__hero">
+          <div className="guest-full__card">
+            <a className="auth-logo" href="/">Onion</a>
+            <div className="film-full-icon">🎞</div>
+            <h1 className="guest-identify__title">Film&apos;s full.</h1>
+            <p className="guest-identify__sub">
+              {isVisible
+                ? `You've used all ${shotsPerGuest} shots. Scroll down to view your photos.`
+                : `You've used all ${shotsPerGuest} shots. The host will reveal your photos soon.`
+              }
+            </p>
+          </div>
         </div>
+        <GuestGallery
+          photos={galleryPhotos}
+          isVisible={isVisible}
+          photoVisibility={photoVisibility}
+          photoVisibleAfter={photoVisibleAfter}
+        />
       </div>
     )
   }
 
   // ── Camera phase ──────────────────────────────────────────────────────────
   return (
-    <div className="camera-wrap">
-      {/* Film grain */}
-      <div className="camera-grain" aria-hidden="true" />
+    <div className="camera-page">
+      <div className="camera-wrap">
+        {/* Film grain */}
+        <div className="camera-grain" aria-hidden="true" />
 
-      {/* Video viewfinder */}
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        className="camera-video"
-        style={{ filter: filter.css === 'none' ? undefined : filter.css }}
+        {/* Video viewfinder */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="camera-video"
+          style={{ filter: filter.css === 'none' ? undefined : filter.css }}
+        />
+
+        {/* Film frame overlay */}
+        <div className="camera-frame" aria-hidden="true">
+          <div className="camera-frame__corner camera-frame__corner--tl" />
+          <div className="camera-frame__corner camera-frame__corner--tr" />
+          <div className="camera-frame__corner camera-frame__corner--bl" />
+          <div className="camera-frame__corner camera-frame__corner--br" />
+        </div>
+
+        {/* HUD — top */}
+        <div className="camera-hud camera-hud--top">
+          <span className="camera-filter-badge">
+            &#128274; {filter.label}
+          </span>
+          <span className="camera-shots">
+            {shotsRemaining} / {shotsPerGuest} <span className="camera-shots__label">shots left</span>
+          </span>
+        </div>
+
+        {/* Flash overlay */}
+        {flash && <div className="camera-flash" aria-hidden="true" />}
+
+        {/* HUD — bottom */}
+        <div className="camera-hud camera-hud--bottom">
+          {uploadError && <p className="camera-error">{uploadError}</p>}
+          <button
+            className={`shutter-btn${capturing ? ' shutter-btn--capturing' : ''}`}
+            onClick={handleCapture}
+            disabled={capturing || shotsRemaining <= 0}
+            aria-label="Take photo"
+          >
+            <span className="shutter-btn__inner" />
+          </button>
+        </div>
+
+        {/* Hidden canvas for capture */}
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
+      </div>
+
+      <GuestGallery
+        photos={galleryPhotos}
+        isVisible={isVisible}
+        photoVisibility={photoVisibility}
+        photoVisibleAfter={photoVisibleAfter}
       />
-
-      {/* Film frame overlay */}
-      <div className="camera-frame" aria-hidden="true">
-        <div className="camera-frame__corner camera-frame__corner--tl" />
-        <div className="camera-frame__corner camera-frame__corner--tr" />
-        <div className="camera-frame__corner camera-frame__corner--bl" />
-        <div className="camera-frame__corner camera-frame__corner--br" />
-      </div>
-
-      {/* HUD — top */}
-      <div className="camera-hud camera-hud--top">
-        <span className="camera-filter-badge">{filter.label}</span>
-        <span className="camera-shots">
-          {shotsRemaining} / {shotsPerGuest} <span className="camera-shots__label">shots left</span>
-        </span>
-      </div>
-
-      {/* Flash overlay */}
-      {flash && <div className="camera-flash" aria-hidden="true" />}
-
-      {/* HUD — bottom */}
-      <div className="camera-hud camera-hud--bottom">
-        {uploadError && <p className="camera-error">{uploadError}</p>}
-        <button
-          className={`shutter-btn${capturing ? ' shutter-btn--capturing' : ''}`}
-          onClick={handleCapture}
-          disabled={capturing || shotsRemaining <= 0}
-          aria-label="Take photo"
-        >
-          <span className="shutter-btn__inner" />
-        </button>
-      </div>
-
-      {/* Hidden canvas for capture */}
-      <canvas ref={canvasRef} style={{ display: 'none' }} />
     </div>
   )
 }
