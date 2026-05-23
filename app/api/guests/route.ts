@@ -2,12 +2,23 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { computeVisibility } from '@/lib/visibility'
+import type { PhotoVisibility } from '@/lib/visibility'
 
 const schema = z.object({
   event_token: z.string().min(1),
   email:       z.string().email(),
   phone:       z.string().min(5),
 })
+
+type EventRow = {
+  id: string
+  guest_limit: number
+  shots_per_guest: number
+  filter: string
+  status: string
+  photo_visibility: PhotoVisibility
+  photo_visible_after: string | null
+}
 
 export async function POST(req: Request) {
   const body = await req.json()
@@ -21,16 +32,34 @@ export async function POST(req: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  const { data: event, error: evErr } = await serviceClient
-    .from('events')
-    .select('id, guest_limit, shots_per_guest, filter, status, photo_visibility, photo_visible_after')
-    .eq('qr_token', event_token)
-    .single()
+  // Try fetching with visibility columns; fall back if migration not yet applied
+  let event: EventRow | null = null
+  {
+    const { data, error } = await serviceClient
+      .from('events')
+      .select('id, guest_limit, shots_per_guest, filter, status, photo_visibility, photo_visible_after')
+      .eq('qr_token', event_token)
+      .single()
 
-  if (evErr || !event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    if (error?.code === '42703') {
+      // photo_visibility columns don't exist yet — query without them
+      const { data: fb, error: fbErr } = await serviceClient
+        .from('events')
+        .select('id, guest_limit, shots_per_guest, filter, status')
+        .eq('qr_token', event_token)
+        .single()
+      if (fbErr || !fb) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+      event = { ...fb, photo_visibility: 'after_event', photo_visible_after: null }
+    } else if (error || !data) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    } else {
+      event = data as EventRow
+    }
+  }
+
   if (event.status !== 'active') return NextResponse.json({ error: 'Event has ended' }, { status: 403 })
 
-  // Check for an existing session first (returning guest) to avoid resetting shots_taken
+  // Check for an existing session (returning guest) to avoid resetting shots_taken
   const { data: existingSession } = await serviceClient
     .from('guest_sessions')
     .select('id, shots_taken')
