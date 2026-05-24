@@ -5,7 +5,7 @@ import type { FilterId } from '@/lib/filters'
 import type { PhotoVisibility } from '@/lib/visibility'
 import GuestGallery, { type GuestPhoto } from './GuestGallery'
 
-type Phase = 'identify' | 'camera' | 'full' | 'error'
+type Phase = 'identify' | 'home' | 'camera' | 'error'
 
 export default function GuestEventPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params)
@@ -17,12 +17,12 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
   const [idError, setIdError]     = useState('')
   const [idLoading, setIdLoading] = useState(false)
 
-  // Camera phase
-  const [sessionId, setSessionId]             = useState('')
-  const [eventId, setEventId]                 = useState('')
-  const [filterId, setFilterId]               = useState<FilterId>('natural')
-  const [shotsRemaining, setShotsRemaining]   = useState(0)
-  const [shotsPerGuest, setShotsPerGuest]     = useState(0)
+  // Session
+  const [sessionId, setSessionId]           = useState('')
+  const [eventId, setEventId]               = useState('')
+  const [filterId, setFilterId]             = useState<FilterId>('natural')
+  const [shotsRemaining, setShotsRemaining] = useState(0)
+  const [shotsPerGuest, setShotsPerGuest]   = useState(0)
 
   // Gallery & visibility
   const [galleryPhotos, setGalleryPhotos]         = useState<GuestPhoto[]>([])
@@ -30,21 +30,22 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
   const [photoVisibility, setPhotoVisibility]     = useState<PhotoVisibility>('after_event')
   const [photoVisibleAfter, setPhotoVisibleAfter] = useState<string | null>(null)
 
-  // Camera refs & state
-  const videoRef     = useRef<HTMLVideoElement>(null)
-  const canvasRef    = useRef<HTMLCanvasElement>(null)
-  const streamRef    = useRef<MediaStream | null>(null)
+  // Camera
+  const videoRef  = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const [facingMode, setFacingMode]   = useState<'environment' | 'user'>('environment')
   const [capturing, setCapturing]     = useState(false)
   const [flash, setFlash]             = useState(false)
   const [uploadError, setUploadError] = useState('')
 
   const filter = getFilter(filterId)
 
-  // Start camera stream when entering camera phase
+  // Start / restart camera when phase or facingMode changes
   useEffect(() => {
     if (phase !== 'camera') return
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      .getUserMedia({ video: { facingMode }, audio: false })
       .then(stream => {
         streamRef.current = stream
         if (videoRef.current) videoRef.current.srcObject = stream
@@ -54,11 +55,11 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
     return () => {
       streamRef.current?.getTracks().forEach(t => t.stop())
     }
-  }, [phase])
+  }, [phase, facingMode])
 
-  // Poll for photo reveal every 30s while photos are locked
+  // Poll for photo reveal every 30s while locked
   useEffect(() => {
-    if (isVisible || !sessionId || (phase !== 'camera' && phase !== 'full')) return
+    if (isVisible || !sessionId || (phase !== 'camera' && phase !== 'home')) return
     const id = setInterval(() => fetchGallery(sessionId), 30_000)
     return () => clearInterval(id)
   }, [isVisible, phase, sessionId])
@@ -100,10 +101,9 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
     setPhotoVisibility(data.photoVisibility)
     setPhotoVisibleAfter(data.photoVisibleAfter)
 
-    // Load existing photos (handles return visits)
     await fetchGallery(data.sessionId)
 
-    setPhase(data.shotsRemaining > 0 ? 'camera' : 'full')
+    setPhase('home')
     setIdLoading(false)
   }
 
@@ -141,16 +141,16 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
         return
       }
 
-      setShotsRemaining(data.shotsRemaining)
-      if (data.shotsRemaining <= 0) setPhase('full')
-
-      // Refresh gallery to show the new shot
+      const remaining = data.shotsRemaining
+      setShotsRemaining(remaining)
       await fetchGallery(sessionId)
+
+      if (remaining <= 0) setPhase('home')
       setCapturing(false)
     }, 'image/jpeg', 0.88)
   }
 
-  // ── Identify phase ────────────────────────────────────────────────────────
+  // ── Identify ──────────────────────────────────────────────────────────────
   if (phase === 'identify') {
     return (
       <div className="guest-identify">
@@ -177,7 +177,7 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
     )
   }
 
-  // ── Error phase ───────────────────────────────────────────────────────────
+  // ── Error ─────────────────────────────────────────────────────────────────
   if (phase === 'error') {
     return (
       <div className="guest-identify">
@@ -185,49 +185,69 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
           <a className="auth-logo" href="/">Onion</a>
           <h1 className="guest-identify__title">Camera unavailable</h1>
           <p className="guest-identify__sub">We couldn&apos;t access your camera. Please allow camera permission and reload.</p>
-          <button className="btn btn--outline btn--full" onClick={() => window.location.reload()} style={{ marginTop: 'var(--sp-4)' }}>
-            Try again
+          <button className="btn btn--outline btn--full" onClick={() => setPhase('home')} style={{ marginTop: 'var(--sp-4)' }}>
+            Back to album
           </button>
         </div>
       </div>
     )
   }
 
-  // ── Full phase ────────────────────────────────────────────────────────────
-  if (phase === 'full') {
+  // ── Home / album ──────────────────────────────────────────────────────────
+  if (phase === 'home') {
     return (
-      <div className="guest-full">
-        <div className="guest-full__hero">
-          <div className="guest-full__card">
-            <a className="auth-logo" href="/">Onion</a>
-            <div className="film-full-icon">🎞</div>
-            <h1 className="guest-identify__title">Film&apos;s full.</h1>
-            <p className="guest-identify__sub">
-              {isVisible
-                ? `You've used all ${shotsPerGuest} shots. Scroll down to view your photos.`
-                : `You've used all ${shotsPerGuest} shots. The host will reveal your photos soon.`
-              }
-            </p>
-          </div>
+      <div className="guest-home">
+        <div className="guest-home__header">
+          <a className="auth-logo guest-home__logo" href="/">Onion</a>
+          <span className="guest-home__album-label">Your Album</span>
         </div>
-        <GuestGallery
-          photos={galleryPhotos}
-          isVisible={isVisible}
-          photoVisibility={photoVisibility}
-          photoVisibleAfter={photoVisibleAfter}
-        />
+
+        <div className="guest-home__gallery">
+          {galleryPhotos.length === 0 ? (
+            <div className="guest-home__empty">
+              <p>Your shots will appear here after you take them.</p>
+            </div>
+          ) : (
+            <GuestGallery
+              photos={galleryPhotos}
+              isVisible={isVisible}
+              photoVisibility={photoVisibility}
+              photoVisibleAfter={photoVisibleAfter}
+            />
+          )}
+        </div>
+
+        <div className="guest-home__bottom">
+          {shotsRemaining > 0 ? (
+            <>
+              <span className="guest-home__shots-label">{shotsRemaining} shots remaining</span>
+              <button className="guest-home__camera-btn" onClick={() => setPhase('camera')}>
+                <span className="guest-home__camera-dot" />
+                Camera
+              </button>
+            </>
+          ) : (
+            <p className="guest-home__film-full-msg">
+              Film&apos;s full — the host will reveal your photos soon.
+            </p>
+          )}
+        </div>
       </div>
     )
   }
 
-  // ── Camera phase ──────────────────────────────────────────────────────────
+  // ── Camera ────────────────────────────────────────────────────────────────
   return (
-    <div className="camera-page">
-      <div className="camera-wrap">
-        {/* Film grain */}
-        <div className="camera-grain" aria-hidden="true" />
+    <div className="camera-screen">
+      <div className="camera-top">
+        <span className="camera-filter-badge">&#128274; {filter.label}</span>
+        <span className="camera-shots">
+          {shotsRemaining} / {shotsPerGuest} <span className="camera-shots__label">left</span>
+        </span>
+      </div>
 
-        {/* Video viewfinder */}
+      <div className="camera-viewfinder-wrap">
+        <div className="camera-grain" aria-hidden="true" />
         <video
           ref={videoRef}
           autoPlay
@@ -236,51 +256,42 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
           className="camera-video"
           style={{ filter: filter.css === 'none' ? undefined : filter.css }}
         />
-
-        {/* Film frame overlay */}
         <div className="camera-frame" aria-hidden="true">
           <div className="camera-frame__corner camera-frame__corner--tl" />
           <div className="camera-frame__corner camera-frame__corner--tr" />
           <div className="camera-frame__corner camera-frame__corner--bl" />
           <div className="camera-frame__corner camera-frame__corner--br" />
         </div>
-
-        {/* HUD — top */}
-        <div className="camera-hud camera-hud--top">
-          <span className="camera-filter-badge">
-            &#128274; {filter.label}
-          </span>
-          <span className="camera-shots">
-            {shotsRemaining} / {shotsPerGuest} <span className="camera-shots__label">shots left</span>
-          </span>
-        </div>
-
-        {/* Flash overlay */}
         {flash && <div className="camera-flash" aria-hidden="true" />}
-
-        {/* HUD — bottom */}
-        <div className="camera-hud camera-hud--bottom">
-          {uploadError && <p className="camera-error">{uploadError}</p>}
-          <button
-            className={`shutter-btn${capturing ? ' shutter-btn--capturing' : ''}`}
-            onClick={handleCapture}
-            disabled={capturing || shotsRemaining <= 0}
-            aria-label="Take photo"
-          >
-            <span className="shutter-btn__inner" />
-          </button>
-        </div>
-
-        {/* Hidden canvas for capture */}
-        <canvas ref={canvasRef} style={{ display: 'none' }} />
       </div>
 
-      <GuestGallery
-        photos={galleryPhotos}
-        isVisible={isVisible}
-        photoVisibility={photoVisibility}
-        photoVisibleAfter={photoVisibleAfter}
-      />
+      <div className="camera-shutter-area">
+        {uploadError && <p className="camera-error">{uploadError}</p>}
+        <button
+          className={`shutter-pill${capturing ? ' shutter-pill--capturing' : ''}`}
+          onClick={handleCapture}
+          disabled={capturing || shotsRemaining <= 0}
+          aria-label="Take photo"
+        >
+          <span className="shutter-pill__dot" />
+        </button>
+      </div>
+
+      <div className="camera-nav">
+        <button className="camera-nav__btn" onClick={() => setPhase('home')} aria-label="Back to album">
+          &#8592;
+        </button>
+        <span className="camera-filter-pill">&#128274; {filter.label}</span>
+        <button
+          className="camera-nav__btn"
+          onClick={() => setFacingMode(f => f === 'environment' ? 'user' : 'environment')}
+          aria-label="Flip camera"
+        >
+          &#8635;
+        </button>
+      </div>
+
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
     </div>
   )
 }
