@@ -1,6 +1,14 @@
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { computeVisibility } from '@/lib/visibility'
+import type { PhotoVisibility } from '@/lib/visibility'
+
+type EventRow = {
+  id: string
+  status: string
+  photo_visibility: PhotoVisibility
+  photo_visible_after: string | null
+}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -16,13 +24,29 @@ export async function GET(req: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  const { data: event, error: evErr } = await serviceClient
-    .from('events')
-    .select('id, status, photo_visibility, photo_visible_after')
-    .eq('qr_token', token)
-    .single()
+  // Try fetching with visibility columns; fall back if migration not yet applied
+  let event: EventRow | null = null
+  {
+    const { data, error } = await serviceClient
+      .from('events')
+      .select('id, status, photo_visibility, photo_visible_after')
+      .eq('qr_token', token)
+      .single()
 
-  if (evErr || !event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    if (error?.code === '42703') {
+      const { data: fb, error: fbErr } = await serviceClient
+        .from('events')
+        .select('id, status')
+        .eq('qr_token', token)
+        .single()
+      if (fbErr || !fb) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+      event = { ...fb, photo_visibility: 'after_event', photo_visible_after: null }
+    } else if (error || !data) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    } else {
+      event = data as EventRow
+    }
+  }
 
   const { data: session, error: sessErr } = await serviceClient
     .from('guest_sessions')
