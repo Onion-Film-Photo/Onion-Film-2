@@ -1,9 +1,11 @@
-import { createClient } from '@/utils/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
-  const supabase = await createClient()
+  const supabase = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
   const formData = await req.formData()
 
   const photo     = formData.get('photo') as File | null
@@ -32,28 +34,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No shots remaining' }, { status: 403 })
   }
 
-  // Upload photo using service-role client (bypasses RLS on storage)
-  const serviceClient = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  )
-
   const storagePath = `events/${eventId}/${sessionId}/${Date.now()}.jpg`
   const bytes = await photo.arrayBuffer()
 
-  const { error: uploadErr } = await serviceClient.storage
+  const { error: uploadErr } = await supabase.storage
     .from('event-photos')
     .upload(storagePath, bytes, { contentType: 'image/jpeg', upsert: false })
 
   if (uploadErr) return NextResponse.json({ error: uploadErr.message }, { status: 500 })
 
   // Insert photo row
-  await serviceClient.from('photos').insert({
+  await supabase.from('photos').insert({
     event_id: eventId, session_id: sessionId, storage_path: storagePath, filter,
   })
 
   // Increment shots_taken
-  const { data: updated } = await serviceClient
+  const { data: updated } = await supabase
     .from('guest_sessions')
     .update({ shots_taken: session.shots_taken + 1 })
     .eq('id', sessionId)
