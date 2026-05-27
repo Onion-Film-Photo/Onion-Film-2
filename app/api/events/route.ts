@@ -8,7 +8,7 @@ import { z } from 'zod'
 const schema = z.object({
   name:            z.string().min(1),
   guest_limit:     z.number().int().min(1).max(500),
-  filter:          z.enum(['natural', 'noir', 'golden_hour', 'dreamy', 'kodak_pop']),
+  filter:          z.enum(['natural', 'ilford_hp5', 'kodak_portra', 'fuji_pro']),
   shots_per_guest: z.number().int().min(1).max(50),
 })
 
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
 
   const body = await req.json()
   const parsed = schema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 })
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid request: ' + parsed.error.issues.map(i => i.message).join(', ') }, { status: 422 })
 
   const { data, error } = await supabase
     .from('events')
