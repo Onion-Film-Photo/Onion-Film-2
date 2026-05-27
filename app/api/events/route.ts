@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     .select('id, qr_token')
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: error.message, debug_filter: parsed.data.filter, debug_code: error.code }, { status: 500 })
   return NextResponse.json(data, { status: 201 })
 }
 
