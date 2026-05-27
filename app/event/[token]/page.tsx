@@ -147,7 +147,7 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
 
       if (remaining <= 0) setPhase('home')
       setCapturing(false)
-    }, 'image/jpeg', 0.88)
+    }, 'image/jpeg', 0.95)
   }
 
   // ── Identify ──────────────────────────────────────────────────────────────
