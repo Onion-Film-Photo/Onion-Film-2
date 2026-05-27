@@ -6,24 +6,28 @@ export type FilterDef = {
   description: string
   // CSS string for live viewfinder preview
   css:         string
+  // Path to reference photo in /public (already shot on that film stock)
+  // null = use gradient swatch
+  previewImage: string | null
   // null = passthrough (Natural)
   gl:          GlParams | null
 }
 
 export const FILTERS: FilterDef[] = [
   {
-    id:          'natural',
-    label:       'Natural',
-    description: 'No filter — true to life',
-    css:         'none',
-    gl:          null,
+    id:           'natural',
+    label:        'Natural',
+    description:  'No filter — true to life',
+    css:          'none',
+    previewImage: null,
+    gl:           null,
   },
   {
-    id:          'ilford_hp5',
-    label:       'Ilford HP5',
-    description: 'Punchy B&W, high contrast',
-    // CSS preview: grayscale + contrast boost
-    css:         'grayscale(100%) contrast(1.2) brightness(1.05)',
+    id:           'ilford_hp5',
+    label:        'Ilford HP5',
+    description:  'Punchy B&W, high contrast',
+    css:          'grayscale(100%) contrast(1.2) brightness(1.05)',
+    previewImage: '/Ilford.jpg',
     gl: {
       // HP5 spectral response: more red-sensitive, less blue-sensitive than standard luminance
       matrix:     [0.28, 0.62, 0.10,  0.28, 0.62, 0.10,  0.28, 0.62, 0.10],
@@ -36,11 +40,11 @@ export const FILTERS: FilterDef[] = [
     },
   },
   {
-    id:          'kodak_portra',
-    label:       'Kodak Portra 400',
-    description: 'Warm, creamy skin tones',
-    // CSS preview: warm cast, slight desaturation
-    css:         'contrast(0.95) saturate(0.85) brightness(1.08) sepia(15%) hue-rotate(3deg)',
+    id:           'kodak_portra',
+    label:        'Kodak Portra 400',
+    description:  'Warm, creamy skin tones',
+    css:          'contrast(0.95) saturate(0.85) brightness(1.08) sepia(15%) hue-rotate(3deg)',
+    previewImage: '/Potra-400.jpg',
     gl: {
       // Warm cast: pull reds up, reduce blue, mix green warmth
       matrix:     [1.06, 0.04, -0.05,   0.00, 0.97, 0.02,   -0.01, 0.02, 0.87],
@@ -53,11 +57,11 @@ export const FILTERS: FilterDef[] = [
     },
   },
   {
-    id:          'fuji_pro',
-    label:       'Fuji Pro 400H',
-    description: 'Cool, airy, soft pastels',
-    // CSS preview: cool, desaturated, airy
-    css:         'contrast(0.9) saturate(0.72) brightness(1.12) hue-rotate(-12deg)',
+    id:           'fuji_pro',
+    label:        'Fuji Pro 400H',
+    description:  'Cool, airy, soft pastels',
+    css:          'contrast(0.9) saturate(0.72) brightness(1.12) hue-rotate(-12deg)',
+    previewImage: '/Fuji-Pro-400.jpg',
     gl: {
       // Fuji "green": slight G boost, reduce R, boost B (cool)
       matrix:     [0.94, 0.01, 0.00,   0.01, 1.01, 0.00,   0.01, 0.02, 1.05],

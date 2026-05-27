@@ -113,7 +113,10 @@ export default function NewEventPage() {
                   >
                     <div
                       className="filter-card__preview"
-                      style={{ filter: f.css === 'none' ? undefined : f.css }}
+                      style={f.previewImage
+                        ? { backgroundImage: `url('${f.previewImage}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                        : { filter: f.css === 'none' ? undefined : f.css }
+                      }
                     />
                     <span className="filter-card__label">{f.label}</span>
                     <span className="filter-card__desc">{f.description}</span>
