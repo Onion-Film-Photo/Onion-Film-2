@@ -6,7 +6,7 @@ create table events (
   host_id         uuid references auth.users(id) on delete cascade not null,
   name            text not null,
   guest_limit     int not null check (guest_limit > 0),
-  filter          text not null check (filter in ('natural','noir','golden_hour','dreamy','kodak_pop')),
+  filter          text not null check (filter in ('natural','ilford_hp5','kodak_portra','fuji_pro')),
   shots_per_guest      int  not null default 27 check (shots_per_guest > 0),
   photo_visibility     text not null default 'after_event'
                          check (photo_visibility in ('immediately','after_event','after_date')),
