@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, use } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
+import { zipSync } from 'fflate'
 import { getTier } from '@/lib/pricing'
 import { getFilter } from '@/lib/filters'
 import type { FilterId } from '@/lib/filters'
@@ -38,8 +39,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [event, setEvent]           = useState<Event | null>(null)
   const [photos, setPhotos]         = useState<Photo[]>([])
   const [loading, setLoading]       = useState(true)
-  const [confirmEnd, setConfirmEnd] = useState(false)
-  const [ending, setEnding]         = useState(false)
+  const [confirmEnd, setConfirmEnd]   = useState(false)
+  const [ending, setEnding]           = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? (typeof window !== 'undefined' ? window.location.origin : '')
 
@@ -65,6 +67,32 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       setConfirmEnd(false)
     }
     setEnding(false)
+  }
+
+  async function handleDownloadAll() {
+    if (!photos.length) return
+    setDownloading(true)
+    try {
+      const fetched = await Promise.all(
+        photos.filter(p => p.url).map(async (p, i) => {
+          const res = await fetch(p.url!)
+          const buf = await res.arrayBuffer()
+          const ext = p.storage_path.split('.').pop() ?? 'jpg'
+          const name = `${String(i + 1).padStart(3, '0')}_${(p.guest_email ?? 'guest').replace(/[^a-z0-9]/gi, '_')}.${ext}`
+          return [name, new Uint8Array(buf)] as [string, Uint8Array]
+        }),
+      )
+      const zip = zipSync(Object.fromEntries(fetched))
+      const blob = new Blob([zip], { type: 'application/zip' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${event!.name.replace(/[^a-z0-9]/gi, '_')}_photos.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloading(false)
+    }
   }
 
   const tier          = getTier(event.guest_limit)
@@ -186,7 +214,18 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
           {/* Photo gallery */}
           <div className="event-panel" style={{ marginTop: 'var(--sp-6)' }}>
-            <h2 className="event-panel__title">Photos ({photoCount})</h2>
+            <div className="event-panel__header">
+              <h2 className="event-panel__title">Photos ({photoCount})</h2>
+              {photos.length > 0 && (
+                <button
+                  className="btn btn--outline btn--sm"
+                  onClick={handleDownloadAll}
+                  disabled={downloading}
+                >
+                  {downloading ? 'Zipping…' : 'Download all'}
+                </button>
+              )}
+            </div>
             {photos.length === 0
               ? <p className="host-empty">No photos yet — guests will appear here in real time.</p>
               : (

@@ -1455,6 +1455,15 @@ section { padding: var(--sp-16) 0; }
   background: var(--white);
   padding: var(--sp-6);
 }
+.event-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-2);
+}
+.event-panel__header .event-panel__title {
+  margin-bottom: 0;
+}
 .event-panel__title {
   font-family: var(--font-display);
   font-size: var(--text-2xl);
