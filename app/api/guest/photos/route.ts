@@ -1,3 +1,5 @@
+export const runtime = 'edge'
+
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { computeVisibility } from '@/lib/visibility'
