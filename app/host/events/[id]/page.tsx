@@ -5,6 +5,14 @@ import { getTier } from '@/lib/pricing'
 import { getFilter } from '@/lib/filters'
 import type { FilterId } from '@/lib/filters'
 
+type GuestSession = {
+  id: string
+  email: string
+  phone: string
+  shots_taken: number
+  created_at: string
+}
+
 type Event = {
   id: string
   name: string
@@ -13,7 +21,7 @@ type Event = {
   shots_per_guest: number
   status: string
   qr_token: string
-  guest_sessions: { count: number }[]
+  guest_sessions: GuestSession[]
   photos: { count: number }[]
 }
 
@@ -26,9 +34,11 @@ type Photo = {
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const [event, setEvent]   = useState<Event | null>(null)
-  const [photos, setPhotos] = useState<Photo[]>([])
-  const [loading, setLoading] = useState(true)
+  const [event, setEvent]           = useState<Event | null>(null)
+  const [photos, setPhotos]         = useState<Photo[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [confirmEnd, setConfirmEnd] = useState(false)
+  const [ending, setEnding]         = useState(false)
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? (typeof window !== 'undefined' ? window.location.origin : '')
 
@@ -46,11 +56,22 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   if (loading) return <div className="host-page"><p style={{ padding: 'var(--sp-8)', textAlign: 'center' }}>Loading…</p></div>
   if (!event)  return <div className="host-page"><p style={{ padding: 'var(--sp-8)', textAlign: 'center' }}>Event not found.</p></div>
 
-  const tier       = getTier(event.guest_limit)
-  const filter     = getFilter(event.filter as FilterId)
-  const guests     = event.guest_sessions?.[0]?.count ?? 0
-  const photoCount = event.photos?.[0]?.count ?? 0
-  const guestUrl   = `${appUrl}/event/${event.qr_token}`
+  async function handleEndEvent() {
+    setEnding(true)
+    const res = await fetch(`/api/events/${id}`, { method: 'PATCH' })
+    if (res.ok) {
+      setEvent(e => e ? { ...e, status: 'ended' } : e)
+      setConfirmEnd(false)
+    }
+    setEnding(false)
+  }
+
+  const tier          = getTier(event.guest_limit)
+  const filter        = getFilter(event.filter as FilterId)
+  const guestSessions = event.guest_sessions ?? []
+  const guests        = guestSessions.length
+  const photoCount    = event.photos?.[0]?.count ?? 0
+  const guestUrl      = `${appUrl}/event/${event.qr_token}`
 
   return (
     <div className="host-page">
@@ -68,7 +89,25 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                 {filter.label} · {event.guest_limit} guests max · {event.shots_per_guest} shots/guest · {tier.label}
               </p>
             </div>
-            <span className={`event-card__status event-card__status--${event.status}`}>{event.status}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+              <span className={`event-card__status event-card__status--${event.status}`}>{event.status}</span>
+              {event.status === 'active' && !confirmEnd && (
+                <button className="btn btn--ghost btn--sm" onClick={() => setConfirmEnd(true)}>
+                  End event
+                </button>
+              )}
+              {event.status === 'active' && confirmEnd && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
+                  <span style={{ fontSize: '0.875rem', color: 'var(--c-text-2)' }}>Reveal photos to guests?</span>
+                  <button className="btn btn--primary btn--sm" onClick={handleEndEvent} disabled={ending}>
+                    {ending ? 'Ending…' : 'Confirm'}
+                  </button>
+                  <button className="btn btn--ghost btn--sm" onClick={() => setConfirmEnd(false)} disabled={ending}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="event-detail-grid">
@@ -113,6 +152,35 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Guest list */}
+          <div className="event-panel" style={{ marginTop: 'var(--sp-6)' }}>
+            <h2 className="event-panel__title">Guests ({guests})</h2>
+            {guestSessions.length === 0 ? (
+              <p className="host-empty">No guests yet — they'll appear here when they scan in.</p>
+            ) : (
+              <table className="guest-table">
+                <thead>
+                  <tr>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Shots taken</th>
+                    <th>Shots remaining</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {guestSessions.map(g => (
+                    <tr key={g.id}>
+                      <td>{g.email}</td>
+                      <td>{g.phone}</td>
+                      <td>{g.shots_taken}</td>
+                      <td>{Math.max(0, event.shots_per_guest - g.shots_taken)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
 
           {/* Photo gallery */}
