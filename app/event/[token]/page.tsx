@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, use } from 'react'
 import { getFilter } from '@/lib/filters'
+import { applyFilmGL } from '@/lib/webglFilm'
 import type { FilterId } from '@/lib/filters'
 import type { PhotoVisibility } from '@/lib/visibility'
 import GuestGallery, { type GuestPhoto } from './GuestGallery'
@@ -120,10 +121,14 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
     canvas.width  = video.videoWidth
     canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')!
-    ctx.filter = filter.css === 'none' ? 'none' : filter.css
     ctx.drawImage(video, 0, 0)
 
-    canvas.toBlob(async blob => {
+    // Apply film stock: WebGL if defined, otherwise plain canvas
+    const processed = filter.gl
+      ? applyFilmGL(canvas, filter.gl, canvas.width, canvas.height)
+      : canvas
+
+    processed.toBlob(async blob => {
       if (!blob) { setCapturing(false); return }
       const fd = new FormData()
       fd.append('photo',     blob, 'photo.jpg')

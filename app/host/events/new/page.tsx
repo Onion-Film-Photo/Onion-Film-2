@@ -116,6 +116,7 @@ export default function NewEventPage() {
                       style={{ filter: f.css === 'none' ? undefined : f.css }}
                     />
                     <span className="filter-card__label">{f.label}</span>
+                    <span className="filter-card__desc">{f.description}</span>
                   </button>
                 ))}
               </div>
