@@ -30,6 +30,7 @@ type Photo = {
   url: string | null
   filter: string
   created_at: string
+  guest_email: string | null
 }
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -191,9 +192,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               : (
                 <div className="photo-gallery">
                   {photos.map(p => (
-                    p.url
-                      ? <img key={p.id} src={p.url} alt="" className="photo-gallery__item" loading="lazy" />
-                      : null
+                    p.url ? (
+                      <div key={p.id} className="photo-gallery__cell">
+                        <img src={p.url} alt="" className="photo-gallery__item" loading="lazy" />
+                        {p.guest_email && (
+                          <span className="photo-gallery__attr">{p.guest_email}</span>
+                        )}
+                      </div>
+                    ) : null
                   ))}
                 </div>
               )

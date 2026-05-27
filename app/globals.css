@@ -1537,11 +1537,23 @@ section { padding: var(--sp-16) 0; }
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: var(--sp-2);
 }
+.photo-gallery__cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
 .photo-gallery__item {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
   display: block;
+}
+.photo-gallery__attr {
+  font-size: 0.7rem;
+  color: var(--c-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
