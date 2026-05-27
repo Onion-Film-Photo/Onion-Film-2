@@ -133,7 +133,7 @@ export function applyFilmGL(
     gl.getUniformLocation(prog, 'u_matrix'), false,
     [m[0],m[3],m[6], m[1],m[4],m[7], m[2],m[5],m[8]],
   )
-  gl.uniform3fv(gl.getUniformLocation(prog, 'u_offset'),   params.offset as number[])
+  gl.uniform3fv(gl.getUniformLocation(prog, 'u_offset'),   [...params.offset])
   gl.uniform1f(gl.getUniformLocation(prog, 'u_sat'),       params.saturation)
   gl.uniform1f(gl.getUniformLocation(prog, 'u_contrast'),  params.contrast)
   gl.uniform1f(gl.getUniformLocation(prog, 'u_lift'),      params.shadowLift)
