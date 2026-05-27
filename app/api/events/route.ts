@@ -1,6 +1,7 @@
 export const runtime = 'edge'
 
 import { createClient } from '@/utils/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { z } from 'zod'
@@ -21,7 +22,12 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request: ' + parsed.error.issues.map(i => i.message).join(', ') }, { status: 422 })
 
-  const { data, error } = await supabase
+  const service = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
+
+  const { data, error } = await service
     .from('events')
     .insert({ ...parsed.data, host_id: user.id, qr_token: nanoid(12) })
     .select('id, qr_token')
