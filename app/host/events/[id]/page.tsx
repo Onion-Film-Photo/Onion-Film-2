@@ -32,6 +32,7 @@ type Photo = {
   filter: string
   created_at: string
   guest_email: string | null
+  storage_path: string
 }
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
