@@ -25,6 +25,8 @@ type Event = {
   clip_duration_seconds: number
   status: string
   qr_token: string
+  photo_visibility: 'immediately' | 'after_event' | 'after_date'
+  photo_visible_after: string | null
   guest_sessions: GuestSession[]
   photos: { count: number }[]
 }
@@ -145,6 +147,13 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               <h1 className="host-page-title">{event.name}</h1>
               <p className="event-detail-meta">
                 {filter.label} · {event.guest_limit} guests max · {event.shots_per_guest} shots/guest · {tier.label}
+              </p>
+              <p className="event-detail-meta" style={{ marginTop: 'var(--sp-1)' }}>
+                {event.photo_visibility === 'immediately' && '📷 Photos reveal immediately'}
+                {event.photo_visibility === 'after_event' && '🔒 Photos reveal when you end the event'}
+                {event.photo_visibility === 'after_date' && event.photo_visible_after &&
+                  `📅 Photos reveal on ${new Date(event.photo_visible_after).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+                }
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
