@@ -1945,6 +1945,7 @@ section { padding: var(--sp-16) 0; }
 
 /* Photo / Video mode toggle */
 .camera-mode-toggle {
+  flex-shrink: 0;
   display: flex;
   justify-content: center;
   gap: var(--sp-2);

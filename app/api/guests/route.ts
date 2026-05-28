@@ -37,7 +37,6 @@ export async function POST(req: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  // Try fetching with visibility columns; fall back if migration not yet applied
   let event: EventRow | null = null
   {
     const { data, error } = await serviceClient
@@ -47,14 +46,14 @@ export async function POST(req: Request) {
       .single()
 
     if (error?.code === '42703') {
-      // photo_visibility columns don't exist yet — query without them
+      // Some migration columns missing — query minimal set and fill defaults
       const { data: fb, error: fbErr } = await serviceClient
         .from('events')
-        .select('id, guest_limit, shots_per_guest, filter, status')
+        .select('id, guest_limit, shots_per_guest, filter, status, video_enabled, clips_per_guest, clip_duration_seconds')
         .eq('qr_token', event_token)
         .single()
       if (fbErr || !fb) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
-      event = { ...fb, photo_visibility: 'after_event', photo_visible_after: null, video_enabled: false, clips_per_guest: 2, clip_duration_seconds: 10 }
+      event = { ...fb, photo_visibility: 'after_event', photo_visible_after: null } as EventRow
     } else if (error || !data) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 })
     } else {
@@ -62,7 +61,45 @@ export async function POST(req: Request) {
     }
   }
 
-  if (event.status !== 'active') return NextResponse.json({ error: 'Event has ended' }, { status: 403 })
+  // Ended event: gallery-only re-entry for participants, 403 for non-participants
+  if (event.status !== 'active') {
+    const { data: endedSession } = await serviceClient
+      .from('guest_sessions')
+      .select('id, shots_taken')
+      .eq('event_id', event.id)
+      .eq('email', email)
+      .maybeSingle()
+
+    if (!endedSession) {
+      return NextResponse.json({ error: "This event has ended — you weren't part of it." }, { status: 403 })
+    }
+
+    let endedClipsRemaining = 0
+    if (event.video_enabled) {
+      const { count } = await serviceClient
+        .from('videos')
+        .select('id', { count: 'exact', head: true })
+        .eq('session_id', endedSession.id)
+      endedClipsRemaining = Math.max(0, event.clips_per_guest - (count ?? 0))
+    }
+
+    return NextResponse.json({
+      sessionId:            endedSession.id,
+      eventId:              event.id,
+      shotsRemaining:       0,
+      shotsPerGuest:        event.shots_per_guest,
+      filter:               event.filter,
+      isVisible:            true,
+      photoVisibility:      'after_event' as const,
+      photoVisibleAfter:    null,
+      eventStatus:          event.status,
+      eventEnded:           true,
+      videoEnabled:         event.video_enabled,
+      clipsPerGuest:        event.clips_per_guest,
+      clipDurationSeconds:  event.clip_duration_seconds,
+      clipsRemaining:       endedClipsRemaining,
+    })
+  }
 
   // Check for an existing session (returning guest) to avoid resetting shots_taken
   const { data: existingSession } = await serviceClient

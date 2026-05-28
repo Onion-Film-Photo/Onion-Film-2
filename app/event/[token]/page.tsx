@@ -4,7 +4,7 @@ import { getFilter, VIDEO_FILTER } from '@/lib/filters'
 import { applyFilmGL } from '@/lib/webglFilm'
 import type { FilterId } from '@/lib/filters'
 import type { PhotoVisibility } from '@/lib/visibility'
-import GuestGallery, { type GuestPhoto } from './GuestGallery'
+import GuestGallery, { type GuestPhoto, type GuestVideo } from './GuestGallery'
 
 type Phase = 'identify' | 'home' | 'camera' | 'error'
 type CameraMode = 'photo' | 'video'
@@ -41,9 +41,11 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
 
   // Gallery & visibility
   const [galleryPhotos, setGalleryPhotos]         = useState<GuestPhoto[]>([])
+  const [galleryVideos, setGalleryVideos]         = useState<GuestVideo[]>([])
   const [isVisible, setIsVisible]                 = useState(false)
   const [photoVisibility, setPhotoVisibility]     = useState<PhotoVisibility>('after_event')
   const [photoVisibleAfter, setPhotoVisibleAfter] = useState<string | null>(null)
+  const [eventEnded, setEventEnded]               = useState(false)
 
   // Camera
   const videoRef  = useRef<HTMLVideoElement>(null)
@@ -80,13 +82,27 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
   }, [isVisible, phase, sessionId])
 
   async function fetchGallery(sid: string) {
-    const res = await fetch(`/api/guest/photos?token=${token}&sessionId=${sid}`)
-    if (!res.ok) return
-    const data = await res.json()
-    setGalleryPhotos(data.photos)
-    setIsVisible(data.isVisible)
-    setPhotoVisibility(data.photoVisibility)
-    setPhotoVisibleAfter(data.photoVisibleAfter)
+    const [photosRes, videosRes] = await Promise.all([
+      fetch(`/api/guest/photos?token=${token}&sessionId=${sid}`),
+      fetch(`/api/guest/videos?token=${token}&sessionId=${sid}`),
+    ])
+
+    if (photosRes.ok) {
+      const data = await photosRes.json()
+      setGalleryPhotos(data.photos)
+      setIsVisible(data.isVisible)
+      setPhotoVisibility(data.photoVisibility)
+      setPhotoVisibleAfter(data.photoVisibleAfter)
+      if (data.eventStatus === 'ended') {
+        setEventEnded(true)
+        setShotsRemaining(0)
+      }
+    }
+
+    if (videosRes.ok) {
+      const data = await videosRes.json()
+      setGalleryVideos(data.videos ?? [])
+    }
   }
 
   async function handleIdentify(e: React.FormEvent) {
@@ -119,6 +135,7 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
     setClipsPerGuest(data.clipsPerGuest ?? 2)
     setClipDurationSeconds(data.clipDurationSeconds ?? 10)
     setClipsRemaining(data.clipsRemaining ?? 0)
+    setEventEnded(data.eventEnded ?? false)
 
     await fetchGallery(data.sessionId)
 
@@ -178,6 +195,13 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
     const stream = streamRef.current
     if (!stream) return
 
+    // Guard against ended tracks (some browsers stop tracks when MediaRecorder.stop() is called)
+    const tracks = stream.getVideoTracks()
+    if (!tracks.length || tracks[0].readyState !== 'live') {
+      setUploadError('Camera stopped. Flip camera or go back and return.')
+      return
+    }
+
     recordedChunksRef.current = []
     recordStartRef.current = Date.now()
 
@@ -187,14 +211,17 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
       ? 'video/webm'
       : 'video/mp4'
 
-    const mr = new MediaRecorder(stream, { mimeType })
-    mr.ondataavailable = e => { if (e.data.size > 0) recordedChunksRef.current.push(e.data) }
-    mr.onstop = handleRecordingStop
-    mr.start(100)
-    mediaRecorderRef.current = mr
-    setRecording(true)
-
-    recordTimerRef.current = setTimeout(() => stopRecording(), clipDurationSeconds * 1000)
+    try {
+      const mr = new MediaRecorder(stream, { mimeType })
+      mr.ondataavailable = e => { if (e.data.size > 0) recordedChunksRef.current.push(e.data) }
+      mr.onstop = handleRecordingStop
+      mr.start(100)
+      mediaRecorderRef.current = mr
+      setRecording(true)
+      recordTimerRef.current = setTimeout(() => stopRecording(), clipDurationSeconds * 1000)
+    } catch {
+      setUploadError('Could not start recording. Please reload.')
+    }
   }
 
   function stopRecording() {
@@ -204,31 +231,41 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
 
   async function handleRecordingStop() {
     setRecording(false)
+
+    // Nothing was captured (e.g. tracks ended before any data arrived) — don't waste a clip slot
+    if (recordedChunksRef.current.length === 0) return
+
     setUploadingClip(true)
     setUploadError('')
 
-    const duration = Math.max(1, Math.round((Date.now() - recordStartRef.current) / 1000))
-    const mimeType = recordedChunksRef.current[0]?.type ?? 'video/webm'
-    const blob = new Blob(recordedChunksRef.current, { type: mimeType })
-    const ext  = mimeType.includes('mp4') ? 'mp4' : 'webm'
+    try {
+      const duration = Math.max(1, Math.round((Date.now() - recordStartRef.current) / 1000))
+      const mimeType = recordedChunksRef.current[0]?.type ?? 'video/webm'
+      const blob = new Blob(recordedChunksRef.current, { type: mimeType })
+      const ext  = mimeType.includes('mp4') ? 'mp4' : 'webm'
 
-    const fd = new FormData()
-    fd.append('video',     blob, `clip.${ext}`)
-    fd.append('sessionId', sessionId)
-    fd.append('eventId',   eventId)
-    fd.append('filter',    'super8')
-    fd.append('duration',  String(duration))
+      const fd = new FormData()
+      fd.append('video',     blob, `clip.${ext}`)
+      fd.append('sessionId', sessionId)
+      fd.append('eventId',   eventId)
+      fd.append('filter',    'super8')
+      fd.append('duration',  String(duration))
 
-    const res  = await fetch('/api/videos', { method: 'POST', body: fd })
-    const data = await res.json()
+      const res  = await fetch('/api/videos', { method: 'POST', body: fd })
+      const data = await res.json()
 
-    if (!res.ok) {
-      setUploadError(data.error ?? 'Upload failed')
-    } else {
-      setClipsRemaining(data.clipsRemaining)
-      if (data.clipsRemaining <= 0) setCameraMode('photo')
+      if (!res.ok) {
+        setUploadError(data.error ?? 'Upload failed')
+      } else {
+        setClipsRemaining(data.clipsRemaining)
+        if (data.clipsRemaining <= 0) setCameraMode('photo')
+        fetchGallery(sessionId)
+      }
+    } catch {
+      setUploadError('Upload failed — please try again.')
+    } finally {
+      setUploadingClip(false)
     }
-    setUploadingClip(false)
   }
 
   // ── Identify ──────────────────────────────────────────────────────────────
@@ -284,13 +321,14 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
         </div>
 
         <div className="guest-home__gallery">
-          {galleryPhotos.length === 0 ? (
+          {galleryPhotos.length === 0 && galleryVideos.length === 0 ? (
             <div className="guest-home__empty">
               <p>Your shots will appear here after you take them.</p>
             </div>
           ) : (
             <GuestGallery
               photos={galleryPhotos}
+              videos={galleryVideos}
               isVisible={isVisible}
               photoVisibility={photoVisibility}
               photoVisibleAfter={photoVisibleAfter}
@@ -299,7 +337,11 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
         </div>
 
         <div className="guest-home__bottom">
-          {shotsRemaining > 0 ? (
+          {eventEnded ? (
+            <p className="guest-home__film-full-msg">
+              Your film is developed — enjoy your shots.
+            </p>
+          ) : shotsRemaining > 0 ? (
             <>
               <span className="guest-home__shots-label">{shotsRemaining} shots remaining</span>
               <button className="guest-home__camera-btn" onClick={() => setPhase('camera')}>

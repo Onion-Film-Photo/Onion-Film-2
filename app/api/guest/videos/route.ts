@@ -26,7 +26,6 @@ export async function GET(req: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  // Try fetching with visibility columns; fall back if migration not yet applied
   let event: EventRow | null = null
   {
     const { data, error } = await serviceClient
@@ -59,36 +58,36 @@ export async function GET(req: Request) {
 
   if (sessErr || !session) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
 
-  const { data: photos, error: photosErr } = await serviceClient
-    .from('photos')
-    .select('id, storage_path, filter, created_at')
+  const { data: videos, error: videosErr } = await serviceClient
+    .from('videos')
+    .select('id, storage_path, filter, duration_seconds, created_at')
     .eq('session_id', sessionId)
     .order('created_at', { ascending: true })
 
-  if (photosErr) return NextResponse.json({ error: photosErr.message }, { status: 500 })
+  if (videosErr) return NextResponse.json({ error: videosErr.message }, { status: 500 })
 
   const isVisible = event.status === 'ended' ? true : computeVisibility(event)
 
-  type PhotoRow = { id: string; storage_path: string; filter: string; created_at: string }
+  type VideoRow = { id: string; storage_path: string; filter: string; duration_seconds: number; created_at: string }
 
-  const photosWithUrls = await Promise.all(
-    (photos ?? []).map(async (photo: PhotoRow) => {
+  const videosWithUrls = await Promise.all(
+    (videos ?? []).map(async (video: VideoRow) => {
       let url: string | null = null
       if (isVisible) {
         const { data: signed } = await serviceClient.storage
-          .from('event-photos')
-          .createSignedUrl(photo.storage_path, 3600)
+          .from('event-videos')
+          .createSignedUrl(video.storage_path, 3600)
         url = signed?.signedUrl ?? null
       }
-      return { id: photo.id, url, filter: photo.filter, created_at: photo.created_at }
+      return {
+        id:               video.id,
+        url,
+        filter:           video.filter,
+        duration_seconds: video.duration_seconds,
+        created_at:       video.created_at,
+      }
     }),
   )
 
-  return NextResponse.json({
-    photos:            photosWithUrls,
-    isVisible,
-    photoVisibility:   event.photo_visibility,
-    photoVisibleAfter: event.photo_visible_after,
-    eventStatus:       event.status,
-  })
+  return NextResponse.json({ videos: videosWithUrls, isVisible })
 }
