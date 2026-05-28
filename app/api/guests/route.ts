@@ -20,6 +20,9 @@ type EventRow = {
   status: string
   photo_visibility: PhotoVisibility
   photo_visible_after: string | null
+  video_enabled: boolean
+  clips_per_guest: number
+  clip_duration_seconds: number
 }
 
 export async function POST(req: Request) {
@@ -39,7 +42,7 @@ export async function POST(req: Request) {
   {
     const { data, error } = await serviceClient
       .from('events')
-      .select('id, guest_limit, shots_per_guest, filter, status, photo_visibility, photo_visible_after')
+      .select('id, guest_limit, shots_per_guest, filter, status, photo_visibility, photo_visible_after, video_enabled, clips_per_guest, clip_duration_seconds')
       .eq('qr_token', event_token)
       .single()
 
@@ -51,7 +54,7 @@ export async function POST(req: Request) {
         .eq('qr_token', event_token)
         .single()
       if (fbErr || !fb) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
-      event = { ...fb, photo_visibility: 'after_event', photo_visible_after: null }
+      event = { ...fb, photo_visibility: 'after_event', photo_visible_after: null, video_enabled: false, clips_per_guest: 2, clip_duration_seconds: 10 }
     } else if (error || !data) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 })
     } else {
@@ -99,15 +102,29 @@ export async function POST(req: Request) {
 
   const isVisible = computeVisibility(event)
 
+  // Count clips already recorded for this session
+  let clipsRemaining = event.clips_per_guest
+  if (event.video_enabled) {
+    const { count } = await serviceClient
+      .from('videos')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_id', session.id)
+    clipsRemaining = Math.max(0, event.clips_per_guest - (count ?? 0))
+  }
+
   return NextResponse.json({
-    sessionId:         session.id,
-    eventId:           event.id,
-    shotsRemaining:    event.shots_per_guest - session.shots_taken,
-    shotsPerGuest:     event.shots_per_guest,
-    filter:            event.filter,
+    sessionId:            session.id,
+    eventId:              event.id,
+    shotsRemaining:       event.shots_per_guest - session.shots_taken,
+    shotsPerGuest:        event.shots_per_guest,
+    filter:               event.filter,
     isVisible,
-    photoVisibility:   event.photo_visibility,
-    photoVisibleAfter: event.photo_visible_after,
-    eventStatus:       event.status,
+    photoVisibility:      event.photo_visibility,
+    photoVisibleAfter:    event.photo_visible_after,
+    eventStatus:          event.status,
+    videoEnabled:         event.video_enabled,
+    clipsPerGuest:        event.clips_per_guest,
+    clipDurationSeconds:  event.clip_duration_seconds,
+    clipsRemaining,
   })
 }
