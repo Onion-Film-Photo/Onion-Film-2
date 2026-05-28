@@ -7,10 +7,13 @@ import { nanoid } from 'nanoid'
 import { z } from 'zod'
 
 const schema = z.object({
-  name:            z.string().min(1),
-  guest_limit:     z.number().int().min(1).max(500),
-  filter:          z.enum(['natural', 'ilford_hp5', 'kodak_portra', 'fuji_pro']),
-  shots_per_guest: z.number().int().min(1).max(50),
+  name:                 z.string().min(1),
+  guest_limit:          z.number().int().min(1).max(500),
+  filter:               z.enum(['natural', 'ilford_hp5', 'kodak_portra', 'fuji_pro']),
+  shots_per_guest:      z.number().int().min(1).max(50),
+  video_enabled:        z.boolean().default(false),
+  clips_per_guest:      z.number().int().min(1).max(5).default(2),
+  clip_duration_seconds: z.union([z.literal(5), z.literal(10), z.literal(15)]).default(10),
 })
 
 export async function POST(req: Request) {

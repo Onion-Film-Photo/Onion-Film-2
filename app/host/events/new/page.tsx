@@ -13,7 +13,10 @@ export default function NewEventPage() {
   const [guestLimit, setGuestLimit] = useState(10)
   const [filter, setFilter]     = useState<FilterId>('natural')
   const [name, setName]         = useState('')
-  const [shots, setShots]       = useState(10)
+  const [shots, setShots]             = useState(10)
+  const [videoEnabled, setVideoEnabled] = useState(false)
+  const [clipsPerGuest, setClipsPerGuest] = useState(2)
+  const [clipDuration, setClipDuration] = useState<5 | 10 | 15>(10)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
@@ -25,7 +28,15 @@ export default function NewEventPage() {
     const res = await fetch('/api/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, guest_limit: guestLimit, filter, shots_per_guest: shots }),
+      body: JSON.stringify({
+        name,
+        guest_limit: guestLimit,
+        filter,
+        shots_per_guest: shots,
+        video_enabled: videoEnabled,
+        clips_per_guest: clipsPerGuest,
+        clip_duration_seconds: clipDuration,
+      }),
     })
     if (!res.ok) {
       const { error: msg } = await res.json()
@@ -161,6 +172,52 @@ export default function NewEventPage() {
                 />
               </label>
 
+              {/* Video toggle */}
+              <div className="auth-label" style={{ marginBottom: 'var(--sp-4)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={videoEnabled}
+                    onChange={e => setVideoEnabled(e.target.checked)}
+                    style={{ width: 18, height: 18, accentColor: 'var(--c-accent)' }}
+                  />
+                  Allow video clips <span style={{ color: 'var(--c-text-2)', fontWeight: 400, fontSize: '0.85em' }}>Super 8 filter</span>
+                </label>
+              </div>
+
+              {videoEnabled && (
+                <>
+                  <label className="auth-label" style={{ marginBottom: 'var(--sp-4)' }}>
+                    Clips per guest <span className="auth-label-hint">({clipsPerGuest})</span>
+                    <input
+                      type="range"
+                      min={1}
+                      max={5}
+                      value={clipsPerGuest}
+                      onChange={e => setClipsPerGuest(Number(e.target.value))}
+                      className="guest-slider"
+                      style={{ marginTop: 'var(--sp-2)' }}
+                    />
+                  </label>
+
+                  <div className="auth-label" style={{ marginBottom: 'var(--sp-6)' }}>
+                    Max clip duration
+                    <div style={{ display: 'flex', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)' }}>
+                      {([5, 10, 15] as const).map(s => (
+                        <button
+                          key={s}
+                          type="button"
+                          className={`btn btn--sm${clipDuration === s ? ' btn--primary' : ' btn--ghost'}`}
+                          onClick={() => setClipDuration(s)}
+                        >
+                          {s}s
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
               {/* Summary card */}
               <div className="review-card">
                 <div className="review-row">
@@ -178,6 +235,10 @@ export default function NewEventPage() {
                 <div className="review-row">
                   <span>Shots per guest</span>
                   <strong>{shots}</strong>
+                </div>
+                <div className="review-row">
+                  <span>Video clips</span>
+                  <strong>{videoEnabled ? `${clipsPerGuest} clips · ${clipDuration}s max · Super 8` : 'Off'}</strong>
                 </div>
               </div>
 
