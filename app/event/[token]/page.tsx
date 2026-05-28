@@ -1,12 +1,13 @@
 'use client'
 import { useState, useEffect, useRef, use } from 'react'
-import { getFilter } from '@/lib/filters'
+import { getFilter, VIDEO_FILTER } from '@/lib/filters'
 import { applyFilmGL } from '@/lib/webglFilm'
 import type { FilterId } from '@/lib/filters'
 import type { PhotoVisibility } from '@/lib/visibility'
-import GuestGallery, { type GuestPhoto } from './GuestGallery'
+import GuestGallery, { type GuestPhoto, type GuestVideo } from './GuestGallery'
 
 type Phase = 'identify' | 'home' | 'camera' | 'error'
+type CameraMode = 'photo' | 'video'
 
 export default function GuestEventPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params)
@@ -25,11 +26,26 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
   const [shotsRemaining, setShotsRemaining] = useState(0)
   const [shotsPerGuest, setShotsPerGuest]   = useState(0)
 
+  // Video
+  const [videoEnabled, setVideoEnabled]           = useState(false)
+  const [clipsPerGuest, setClipsPerGuest]         = useState(2)
+  const [clipDurationSeconds, setClipDurationSeconds] = useState(10)
+  const [clipsRemaining, setClipsRemaining]       = useState(0)
+  const [cameraMode, setCameraMode]               = useState<CameraMode>('photo')
+  const [recording, setRecording]                 = useState(false)
+  const [uploadingClip, setUploadingClip]         = useState(false)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordedChunksRef = useRef<Blob[]>([])
+  const recordStartRef   = useRef<number>(0)
+  const recordTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Gallery & visibility
   const [galleryPhotos, setGalleryPhotos]         = useState<GuestPhoto[]>([])
+  const [galleryVideos, setGalleryVideos]         = useState<GuestVideo[]>([])
   const [isVisible, setIsVisible]                 = useState(false)
   const [photoVisibility, setPhotoVisibility]     = useState<PhotoVisibility>('after_event')
   const [photoVisibleAfter, setPhotoVisibleAfter] = useState<string | null>(null)
+  const [eventEnded, setEventEnded]               = useState(false)
 
   // Camera
   const videoRef  = useRef<HTMLVideoElement>(null)
@@ -66,13 +82,27 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
   }, [isVisible, phase, sessionId])
 
   async function fetchGallery(sid: string) {
-    const res = await fetch(`/api/guest/photos?token=${token}&sessionId=${sid}`)
-    if (!res.ok) return
-    const data = await res.json()
-    setGalleryPhotos(data.photos)
-    setIsVisible(data.isVisible)
-    setPhotoVisibility(data.photoVisibility)
-    setPhotoVisibleAfter(data.photoVisibleAfter)
+    const [photosRes, videosRes] = await Promise.all([
+      fetch(`/api/guest/photos?token=${token}&sessionId=${sid}`),
+      fetch(`/api/guest/videos?token=${token}&sessionId=${sid}`),
+    ])
+
+    if (photosRes.ok) {
+      const data = await photosRes.json()
+      setGalleryPhotos(data.photos)
+      setIsVisible(data.isVisible)
+      setPhotoVisibility(data.photoVisibility)
+      setPhotoVisibleAfter(data.photoVisibleAfter)
+      if (data.eventStatus === 'ended') {
+        setEventEnded(true)
+        setShotsRemaining(0)
+      }
+    }
+
+    if (videosRes.ok) {
+      const data = await videosRes.json()
+      setGalleryVideos(data.videos ?? [])
+    }
   }
 
   async function handleIdentify(e: React.FormEvent) {
@@ -101,6 +131,11 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
     setIsVisible(data.isVisible)
     setPhotoVisibility(data.photoVisibility)
     setPhotoVisibleAfter(data.photoVisibleAfter)
+    setVideoEnabled(data.videoEnabled ?? false)
+    setClipsPerGuest(data.clipsPerGuest ?? 2)
+    setClipDurationSeconds(data.clipDurationSeconds ?? 10)
+    setClipsRemaining(data.clipsRemaining ?? 0)
+    setEventEnded(data.eventEnded ?? false)
 
     await fetchGallery(data.sessionId)
 
@@ -153,6 +188,84 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
       if (remaining <= 0) setPhase('home')
       setCapturing(false)
     }, 'image/jpeg', 0.95)
+  }
+
+  function startRecording() {
+    if (recording || uploadingClip || clipsRemaining <= 0) return
+    const stream = streamRef.current
+    if (!stream) return
+
+    // Guard against ended tracks (some browsers stop tracks when MediaRecorder.stop() is called)
+    const tracks = stream.getVideoTracks()
+    if (!tracks.length || tracks[0].readyState !== 'live') {
+      setUploadError('Camera stopped. Flip camera or go back and return.')
+      return
+    }
+
+    recordedChunksRef.current = []
+    recordStartRef.current = Date.now()
+
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+      ? 'video/webm;codecs=vp9'
+      : MediaRecorder.isTypeSupported('video/webm')
+      ? 'video/webm'
+      : 'video/mp4'
+
+    try {
+      const mr = new MediaRecorder(stream, { mimeType })
+      mr.ondataavailable = e => { if (e.data.size > 0) recordedChunksRef.current.push(e.data) }
+      mr.onstop = handleRecordingStop
+      mr.start(100)
+      mediaRecorderRef.current = mr
+      setRecording(true)
+      recordTimerRef.current = setTimeout(() => stopRecording(), clipDurationSeconds * 1000)
+    } catch {
+      setUploadError('Could not start recording. Please reload.')
+    }
+  }
+
+  function stopRecording() {
+    if (recordTimerRef.current) { clearTimeout(recordTimerRef.current); recordTimerRef.current = null }
+    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
+  }
+
+  async function handleRecordingStop() {
+    setRecording(false)
+
+    // Nothing was captured (e.g. tracks ended before any data arrived) — don't waste a clip slot
+    if (recordedChunksRef.current.length === 0) return
+
+    setUploadingClip(true)
+    setUploadError('')
+
+    try {
+      const duration = Math.max(1, Math.round((Date.now() - recordStartRef.current) / 1000))
+      const mimeType = recordedChunksRef.current[0]?.type ?? 'video/webm'
+      const blob = new Blob(recordedChunksRef.current, { type: mimeType })
+      const ext  = mimeType.includes('mp4') ? 'mp4' : 'webm'
+
+      const fd = new FormData()
+      fd.append('video',     blob, `clip.${ext}`)
+      fd.append('sessionId', sessionId)
+      fd.append('eventId',   eventId)
+      fd.append('filter',    'super8')
+      fd.append('duration',  String(duration))
+
+      const res  = await fetch('/api/videos', { method: 'POST', body: fd })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setUploadError(data.error ?? 'Upload failed')
+      } else {
+        setClipsRemaining(data.clipsRemaining)
+        if (data.clipsRemaining <= 0) setCameraMode('photo')
+        fetchGallery(sessionId)
+      }
+    } catch {
+      setUploadError('Upload failed — please try again.')
+    } finally {
+      setUploadingClip(false)
+    }
   }
 
   // ── Identify ──────────────────────────────────────────────────────────────
@@ -208,13 +321,14 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
         </div>
 
         <div className="guest-home__gallery">
-          {galleryPhotos.length === 0 ? (
+          {galleryPhotos.length === 0 && galleryVideos.length === 0 ? (
             <div className="guest-home__empty">
               <p>Your shots will appear here after you take them.</p>
             </div>
           ) : (
             <GuestGallery
               photos={galleryPhotos}
+              videos={galleryVideos}
               isVisible={isVisible}
               photoVisibility={photoVisibility}
               photoVisibleAfter={photoVisibleAfter}
@@ -223,7 +337,11 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
         </div>
 
         <div className="guest-home__bottom">
-          {shotsRemaining > 0 ? (
+          {eventEnded ? (
+            <p className="guest-home__film-full-msg">
+              Your film is developed — enjoy your shots.
+            </p>
+          ) : shotsRemaining > 0 ? (
             <>
               <span className="guest-home__shots-label">{shotsRemaining} shots remaining</span>
               <button className="guest-home__camera-btn" onClick={() => setPhase('camera')}>
@@ -242,13 +360,23 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
   }
 
   // ── Camera ────────────────────────────────────────────────────────────────
+  const activeFilter = cameraMode === 'video' ? VIDEO_FILTER : filter
+  const viewfinderCss = activeFilter.css === 'none' ? undefined : activeFilter.css
+
   return (
     <div className="camera-screen">
       <div className="camera-top">
-        <span className="camera-filter-badge">&#128274; {filter.label}</span>
-        <span className="camera-shots">
-          {shotsRemaining} / {shotsPerGuest} <span className="camera-shots__label">left</span>
-        </span>
+        <span className="camera-filter-badge">&#128274; {activeFilter.label}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+          <span className="camera-shots">
+            {shotsRemaining} / {shotsPerGuest} <span className="camera-shots__label">left</span>
+          </span>
+          {videoEnabled && cameraMode === 'video' && (
+            <span className="camera-shots" style={{ fontSize: '0.75rem' }}>
+              {clipsRemaining} / {clipsPerGuest} <span className="camera-shots__label">clips</span>
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="camera-viewfinder-wrap">
@@ -259,7 +387,7 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
           playsInline
           muted
           className="camera-video"
-          style={{ filter: filter.css === 'none' ? undefined : filter.css }}
+          style={{ filter: viewfinderCss }}
         />
         <div className="camera-frame" aria-hidden="true">
           <div className="camera-frame__corner camera-frame__corner--tl" />
@@ -268,28 +396,69 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
           <div className="camera-frame__corner camera-frame__corner--br" />
         </div>
         {flash && <div className="camera-flash" aria-hidden="true" />}
+        {recording && <div className="camera-rec-badge" aria-hidden="true">&#9679; REC</div>}
       </div>
+
+      {/* Photo / Video mode toggle */}
+      {videoEnabled && (
+        <div className="camera-mode-toggle">
+          <button
+            className={`camera-mode-btn${cameraMode === 'photo' ? ' camera-mode-btn--active' : ''}`}
+            onClick={() => { if (!recording) setCameraMode('photo') }}
+          >
+            Photo
+          </button>
+          <button
+            className={`camera-mode-btn${cameraMode === 'video' ? ' camera-mode-btn--active' : ''}`}
+            onClick={() => { if (!recording && clipsRemaining > 0) setCameraMode('video') }}
+            disabled={clipsRemaining <= 0}
+          >
+            Video
+          </button>
+        </div>
+      )}
 
       <div className="camera-shutter-area">
         {uploadError && <p className="camera-error">{uploadError}</p>}
-        <button
-          className={`shutter-pill${capturing ? ' shutter-pill--capturing' : ''}`}
-          onClick={handleCapture}
-          disabled={capturing || shotsRemaining <= 0}
-          aria-label="Take photo"
-        >
-          <span className="shutter-pill__dot" />
-        </button>
+
+        {cameraMode === 'photo' ? (
+          <button
+            className={`shutter-pill${capturing ? ' shutter-pill--capturing' : ''}`}
+            onClick={handleCapture}
+            disabled={capturing || shotsRemaining <= 0}
+            aria-label="Take photo"
+          >
+            <span className="shutter-pill__dot" />
+          </button>
+        ) : (
+          <button
+            className={`shutter-pill shutter-pill--video${recording ? ' shutter-pill--recording' : ''}`}
+            onMouseDown={startRecording}
+            onMouseUp={stopRecording}
+            onMouseLeave={stopRecording}
+            onTouchStart={e => { e.preventDefault(); startRecording() }}
+            onTouchEnd={e => { e.preventDefault(); stopRecording() }}
+            disabled={uploadingClip || clipsRemaining <= 0}
+            aria-label={recording ? 'Recording… release to stop' : 'Hold to record'}
+          >
+            <span className="shutter-pill__dot" />
+          </button>
+        )}
+
+        {cameraMode === 'video' && !recording && !uploadingClip && clipsRemaining > 0 && (
+          <p className="camera-hint">Hold to record · {clipDurationSeconds}s max</p>
+        )}
+        {uploadingClip && <p className="camera-hint">Saving clip…</p>}
       </div>
 
       <div className="camera-nav">
-        <button className="camera-nav__btn" onClick={() => setPhase('home')} aria-label="Back to album">
+        <button className="camera-nav__btn" onClick={() => { stopRecording(); setPhase('home') }} aria-label="Back to album">
           &#8592;
         </button>
-        <span className="camera-filter-pill">&#128274; {filter.label}</span>
+        <span className="camera-filter-pill">&#128274; {activeFilter.label}</span>
         <button
           className="camera-nav__btn"
-          onClick={() => setFacingMode(f => f === 'environment' ? 'user' : 'environment')}
+          onClick={() => { if (!recording) setFacingMode(f => f === 'environment' ? 'user' : 'environment') }}
           aria-label="Flip camera"
         >
           &#8635;

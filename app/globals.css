@@ -1943,6 +1943,73 @@ section { padding: var(--sp-16) 0; }
   border-radius: 40px;
 }
 
+/* Photo / Video mode toggle */
+.camera-mode-toggle {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  background: #0a0a0a;
+}
+.camera-mode-btn {
+  padding: 6px 22px;
+  border-radius: 40px;
+  border: 1px solid #333;
+  background: transparent;
+  color: #888;
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.camera-mode-btn--active {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #0a0a0a;
+  font-weight: 600;
+}
+.camera-mode-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Video shutter + recording states */
+.shutter-pill--video { border-color: #ef4444; }
+.shutter-pill--video .shutter-pill__dot { background: #ef4444; border-radius: 4px; }
+.shutter-pill--recording {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3);
+  animation: rec-pulse 1s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(239,68,68,0.3); }
+  50%       { box-shadow: 0 0 0 8px rgba(239,68,68,0.15); }
+}
+.shutter-pill--recording .shutter-pill__dot { transform: scale(0.5); border-radius: 2px; }
+
+/* REC badge overlay */
+.camera-rec-badge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  animation: rec-pulse 1s ease-in-out infinite;
+}
+
+/* Hold-to-record hint */
+.camera-hint {
+  font-size: 0.72rem;
+  color: #666;
+  letter-spacing: 0.05em;
+  text-align: center;
+  margin-top: var(--sp-2);
+}
+
 /* ═══════════════════════════════════════════════════════════════════ */
 /* GUEST GALLERY                                                        */
 /* ═══════════════════════════════════════════════════════════════════ */

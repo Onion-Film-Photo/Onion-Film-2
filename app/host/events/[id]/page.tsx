@@ -87,24 +87,36 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   async function handleDownloadAll() {
-    if (!photos.length) return
+    if (!photos.length && !videos.length) return
     setDownloading(true)
     try {
-      const fetched = await Promise.all(
-        photos.filter(p => p.url).map(async (p, i) => {
-          const res = await fetch(p.url!)
-          const buf = await res.arrayBuffer()
-          const ext = p.storage_path.split('.').pop() ?? 'jpg'
-          const name = `${String(i + 1).padStart(3, '0')}_${(p.guest_email ?? 'guest').replace(/[^a-z0-9]/gi, '_')}.${ext}`
-          return [name, new Uint8Array(buf)] as [string, Uint8Array]
-        }),
-      )
-      const zip = zipSync(Object.fromEntries(fetched))
+      const [photoFiles, videoFiles] = await Promise.all([
+        Promise.all(
+          photos.filter(p => p.url).map(async (p, i) => {
+            const res = await fetch(p.url!)
+            const buf = await res.arrayBuffer()
+            const ext  = p.storage_path.split('.').pop() ?? 'jpg'
+            const name = `photos/${String(i + 1).padStart(3, '0')}_${(p.guest_email ?? 'guest').replace(/[^a-z0-9]/gi, '_')}.${ext}`
+            return [name, new Uint8Array(buf)] as [string, Uint8Array]
+          }),
+        ),
+        Promise.all(
+          videos.filter(v => v.url).map(async (v, i) => {
+            const res = await fetch(v.url!)
+            const buf = await res.arrayBuffer()
+            const ext  = v.storage_path.split('.').pop() ?? 'webm'
+            const name = `videos/${String(i + 1).padStart(3, '0')}_${(v.guest_email ?? 'guest').replace(/[^a-z0-9]/gi, '_')}.${ext}`
+            return [name, new Uint8Array(buf)] as [string, Uint8Array]
+          }),
+        ),
+      ])
+
+      const zip  = zipSync(Object.fromEntries([...photoFiles, ...videoFiles]))
       const blob = new Blob([zip], { type: 'application/zip' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${event!.name.replace(/[^a-z0-9]/gi, '_')}_photos.zip`
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `${event!.name.replace(/[^a-z0-9]/gi, '_')}_roll.zip`
       a.click()
       URL.revokeObjectURL(url)
     } finally {
@@ -233,13 +245,13 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           <div className="event-panel" style={{ marginTop: 'var(--sp-6)' }}>
             <div className="event-panel__header">
               <h2 className="event-panel__title">Photos ({photoCount})</h2>
-              {photos.length > 0 && (
+              {(photos.length > 0 || videos.length > 0) && (
                 <button
                   className="btn btn--outline btn--sm"
                   onClick={handleDownloadAll}
                   disabled={downloading}
                 >
-                  {downloading ? 'Zipping…' : 'Download all'}
+                  {downloading ? 'Zipping…' : `Download all${videos.length > 0 ? ' (photos + clips)' : ''}`}
                 </button>
               )}
             </div>
