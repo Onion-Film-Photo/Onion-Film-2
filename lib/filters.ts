@@ -75,7 +75,27 @@ export const FILTERS: FilterDef[] = [
   },
 ]
 
+// Video-only filter — not shown in the photo filter picker
+export const VIDEO_FILTER: FilterDef = {
+  id:           'super8',
+  label:        'Super 8',
+  description:  'Warm tungsten grade, film grain, vignette',
+  css:          'contrast(1.05) saturate(0.8) brightness(0.95) sepia(20%) hue-rotate(8deg)',
+  previewImage: null,
+  gl: {
+    // Kodak Vision3 200T tungsten reference: warm shadows, slight green-red push in mids
+    matrix:     [1.08, 0.03, -0.02,  0.01, 0.98, 0.00,  -0.02, 0.01, 0.82],
+    offset:     [0.015, 0.005, -0.020],
+    saturation: 0.80,  // slightly desaturated (film look)
+    contrast:   0.12,  // gentle S-curve
+    shadowLift: 0.03,  // warm lifted toe
+    grain:      0.030, // visible grain (200T ISO)
+    vignette:   0.35,  // stronger vignette for home-movie feel
+  },
+}
+
 export type FilterId = 'natural' | 'ilford_hp5' | 'kodak_portra' | 'fuji_pro'
+export type VideoFilterId = 'super8'
 
 export function getFilter(id: string): FilterDef {
   return FILTERS.find(f => f.id === id) ?? FILTERS[0]

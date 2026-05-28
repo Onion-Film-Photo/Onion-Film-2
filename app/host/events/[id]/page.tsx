@@ -20,6 +20,9 @@ type Event = {
   guest_limit: number
   filter: FilterId
   shots_per_guest: number
+  video_enabled: boolean
+  clips_per_guest: number
+  clip_duration_seconds: number
   status: string
   qr_token: string
   guest_sessions: GuestSession[]
@@ -35,10 +38,21 @@ type Photo = {
   storage_path: string
 }
 
+type Video = {
+  id: string
+  url: string | null
+  duration_seconds: number
+  filter: string
+  created_at: string
+  guest_email: string | null
+  storage_path: string
+}
+
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [event, setEvent]           = useState<Event | null>(null)
   const [photos, setPhotos]         = useState<Photo[]>([])
+  const [videos, setVideos]         = useState<Video[]>([])
   const [loading, setLoading]       = useState(true)
   const [confirmEnd, setConfirmEnd]   = useState(false)
   const [ending, setEnding]           = useState(false)
@@ -50,9 +64,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     Promise.all([
       fetch(`/api/events/${id}`).then(r => r.json()),
       fetch(`/api/photos/${id}`).then(r => r.json()),
-    ]).then(([ev, ph]) => {
+      fetch(`/api/videos/${id}`).then(r => r.json()),
+    ]).then(([ev, ph, vi]) => {
       setEvent(ev)
       setPhotos(Array.isArray(ph) ? ph : [])
+      setVideos(Array.isArray(vi) ? vi : [])
       setLoading(false)
     })
   }, [id])
@@ -245,6 +261,42 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               )
             }
           </div>
+
+          {/* Video clips gallery (only shown if video is enabled for this event) */}
+          {event.video_enabled && (
+            <div className="event-panel" style={{ marginTop: 'var(--sp-6)' }}>
+              <div className="event-panel__header">
+                <h2 className="event-panel__title">Video Clips ({videos.length})</h2>
+                <span style={{ fontSize: '0.8rem', color: 'var(--c-text-2)' }}>
+                  Super 8 · {event.clips_per_guest} clips/guest · {event.clip_duration_seconds}s max
+                </span>
+              </div>
+              {videos.length === 0
+                ? <p className="host-empty">No clips yet — they&apos;ll appear here as guests record.</p>
+                : (
+                  <div className="photo-gallery">
+                    {videos.map(v => (
+                      v.url ? (
+                        <div key={v.id} className="photo-gallery__cell">
+                          <video
+                            src={v.url}
+                            className="photo-gallery__item"
+                            controls
+                            playsInline
+                            preload="metadata"
+                            style={{ objectFit: 'cover' }}
+                          />
+                          <span className="photo-gallery__attr">
+                            {v.guest_email ?? 'Guest'} · {v.duration_seconds}s
+                          </span>
+                        </div>
+                      ) : null
+                    ))}
+                  </div>
+                )
+              }
+            </div>
+          )}
         </div>
       </main>
     </div>
