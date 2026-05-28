@@ -17,6 +17,8 @@ export default function NewEventPage() {
   const [videoEnabled, setVideoEnabled] = useState(false)
   const [clipsPerGuest, setClipsPerGuest] = useState(2)
   const [clipDuration, setClipDuration] = useState<5 | 10 | 15>(10)
+  const [photoVisibility, setPhotoVisibility] = useState<'after_event' | 'immediately' | 'after_date'>('after_event')
+  const [photoVisibleAfter, setPhotoVisibleAfter] = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
@@ -30,12 +32,14 @@ export default function NewEventPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name,
-        guest_limit: guestLimit,
+        guest_limit:           guestLimit,
         filter,
-        shots_per_guest: shots,
-        video_enabled: videoEnabled,
-        clips_per_guest: clipsPerGuest,
+        shots_per_guest:       shots,
+        video_enabled:         videoEnabled,
+        clips_per_guest:       clipsPerGuest,
         clip_duration_seconds: clipDuration,
+        photo_visibility:      photoVisibility,
+        photo_visible_after:   photoVisibility === 'after_date' && photoVisibleAfter ? photoVisibleAfter : null,
       }),
     })
     if (!res.ok) {
@@ -218,6 +222,37 @@ export default function NewEventPage() {
                 </>
               )}
 
+              {/* Photo reveal */}
+              <div className="auth-label" style={{ marginBottom: 'var(--sp-6)' }}>
+                Photo reveal
+                <div style={{ display: 'flex', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)', flexWrap: 'wrap' }}>
+                  {([
+                    { value: 'after_event',  label: 'After event ends' },
+                    { value: 'immediately',  label: 'Immediately' },
+                    { value: 'after_date',   label: 'On a date' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className={`btn btn--sm${photoVisibility === opt.value ? ' btn--primary' : ' btn--ghost'}`}
+                      onClick={() => setPhotoVisibility(opt.value)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                {photoVisibility === 'after_date' && (
+                  <input
+                    className="auth-input"
+                    type="datetime-local"
+                    value={photoVisibleAfter}
+                    onChange={e => setPhotoVisibleAfter(e.target.value)}
+                    style={{ marginTop: 'var(--sp-3)' }}
+                    required
+                  />
+                )}
+              </div>
+
               {/* Summary card */}
               <div className="review-card">
                 <div className="review-row">
@@ -240,6 +275,16 @@ export default function NewEventPage() {
                   <span>Video clips</span>
                   <strong>{videoEnabled ? `${clipsPerGuest} clips · ${clipDuration}s max · Super 8` : 'Off'}</strong>
                 </div>
+                <div className="review-row">
+                  <span>Reveal photos</span>
+                  <strong>
+                    {photoVisibility === 'immediately' && 'Immediately'}
+                    {photoVisibility === 'after_event' && 'After event ends'}
+                    {photoVisibility === 'after_date' && photoVisibleAfter
+                      ? `On ${new Date(photoVisibleAfter).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+                      : photoVisibility === 'after_date' ? 'On a date — pick one above' : ''}
+                  </strong>
+                </div>
               </div>
 
               {error && <p className="auth-error" style={{ marginBottom: 'var(--sp-3)' }}>{error}</p>}
@@ -249,7 +294,7 @@ export default function NewEventPage() {
                 <button
                   className="btn btn--primary"
                   onClick={handleCreate}
-                  disabled={!name.trim() || loading}
+                  disabled={!name.trim() || loading || (photoVisibility === 'after_date' && !photoVisibleAfter)}
                 >
                   {loading ? 'Creating…' : tier.price === 0 ? 'Create Event — Free' : `Create Event — $${tier.price}`}
                 </button>
