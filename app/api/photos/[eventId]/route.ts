@@ -1,3 +1,5 @@
+export const runtime = 'edge'
+
 import { createClient } from '@/utils/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
@@ -25,7 +27,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ eventId
 
   const { data: photos, error } = await serviceClient
     .from('photos')
-    .select('id, storage_path, filter, created_at')
+    .select('id, storage_path, filter, created_at, guest_sessions(email)')
     .eq('event_id', eventId)
     .order('created_at', { ascending: false })
 
@@ -37,7 +39,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ eventId
       const { data } = await serviceClient.storage
         .from('event-photos')
         .createSignedUrl(p.storage_path, 3600)
-      return { ...p, url: data?.signedUrl ?? null }
+      const session = Array.isArray(p.guest_sessions) ? p.guest_sessions[0] : p.guest_sessions
+      return { ...p, url: data?.signedUrl ?? null, guest_email: (session as { email?: string } | null)?.email ?? null }
     }),
   )
 
