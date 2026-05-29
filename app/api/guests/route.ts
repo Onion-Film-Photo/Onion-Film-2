@@ -20,6 +20,70 @@ type EventRow = {
   photo_visible_after: string | null
 }
 
+// Restore an existing guest session by sessionId (used after anonymous auth session restore)
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url)
+  const token     = searchParams.get('token')
+  const sessionId = searchParams.get('sessionId')
+
+  if (!token || !sessionId) {
+    return NextResponse.json({ error: 'Missing token or sessionId' }, { status: 422 })
+  }
+
+  const serviceClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
+
+  let event: EventRow | null = null
+  {
+    const { data, error } = await serviceClient
+      .from('events')
+      .select('id, guest_limit, shots_per_guest, filter, status, photo_visibility, photo_visible_after')
+      .eq('qr_token', token)
+      .single()
+
+    if (error?.code === '42703') {
+      const { data: fb, error: fbErr } = await serviceClient
+        .from('events')
+        .select('id, guest_limit, shots_per_guest, filter, status')
+        .eq('qr_token', token)
+        .single()
+      if (fbErr || !fb) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+      event = { ...fb, photo_visibility: 'after_event', photo_visible_after: null }
+    } else if (error || !data) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    } else {
+      event = data as EventRow
+    }
+  }
+
+  if (event.status !== 'active') return NextResponse.json({ error: 'Event has ended' }, { status: 403 })
+
+  const { data: session, error: sessErr } = await serviceClient
+    .from('guest_sessions')
+    .select('id, shots_taken')
+    .eq('id', sessionId)
+    .eq('event_id', event.id)
+    .single()
+
+  if (sessErr || !session) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
+
+  const isVisible = computeVisibility(event)
+
+  return NextResponse.json({
+    sessionId:         session.id,
+    eventId:           event.id,
+    shotsRemaining:    event.shots_per_guest - session.shots_taken,
+    shotsPerGuest:     event.shots_per_guest,
+    filter:            event.filter,
+    isVisible,
+    photoVisibility:   event.photo_visibility,
+    photoVisibleAfter: event.photo_visible_after,
+    eventStatus:       event.status,
+  })
+}
+
 export async function POST(req: Request) {
   const body = await req.json()
   const parsed = schema.safeParse(body)
@@ -62,15 +126,24 @@ export async function POST(req: Request) {
   // Check for an existing session (returning guest) to avoid resetting shots_taken
   const { data: existingSession } = await serviceClient
     .from('guest_sessions')
-    .select('id, shots_taken')
+    .select('id, shots_taken, phone')
     .eq('event_id', event.id)
     .eq('email', email)
     .maybeSingle()
 
   let session: { id: string; shots_taken: number }
+  let isReturning = false
 
   if (existingSession) {
+    // Email+phone are the credentials — both must match
+    if (existingSession.phone !== phone) {
+      return NextResponse.json(
+        { error: 'That phone number doesn\'t match what we have for this email.' },
+        { status: 403 },
+      )
+    }
     session = existingSession
+    isReturning = true
   } else {
     // New guest — enforce guest limit
     const { count } = await serviceClient
@@ -107,5 +180,6 @@ export async function POST(req: Request) {
     photoVisibility:   event.photo_visibility,
     photoVisibleAfter: event.photo_visible_after,
     eventStatus:       event.status,
+    isReturning,
   })
 }
