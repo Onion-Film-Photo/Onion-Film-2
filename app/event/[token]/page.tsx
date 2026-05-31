@@ -65,6 +65,7 @@ export default function GuestEventPage({
   );
   const [capturing, setCapturing] = useState(false);
   const [flash, setFlash] = useState(false);
+  const [flashEnabled, setFlashEnabled] = useState(false);
   const [uploadError, setUploadError] = useState('');
 
   // Film counter wheel animation
@@ -623,7 +624,7 @@ export default function GuestEventPage({
           )}
         </div>
 
-        <div className="guest-home__bottom">
+        <div className="guest-home__bottom backdrop-blur-xl">
           {eventEnded ? (
             <p className="guest-home__film-full-msg">
               Your film is developed — enjoy your shots.
@@ -655,35 +656,18 @@ export default function GuestEventPage({
   const activeFilter = cameraMode === 'video' ? VIDEO_FILTER : filter;
   const viewfinderCss =
     activeFilter.css === 'none' ? undefined : activeFilter.css;
+  const filmCount = cameraMode === 'video' ? clipsRemaining : shotsRemaining;
 
   return (
-    <div className="camera-screen">
+    <div className="camera-screen ">
       <div className="camera-top">
         <button
-          className="camera-back-btn"
+          className="camera-settings-btn"
           onClick={() => {
             stopRecording();
             setPhase('home');
           }}
           aria-label="Back to album"
-        >
-          &#8592; Back
-        </button>
-        <button
-          className="camera-flip-btn"
-          onClick={() => {
-            if (!recording) {
-              setFacingMode((f) =>
-                f === 'environment' ? 'user' : 'environment',
-              );
-              setActiveCameraId(undefined);
-              setRearCameras([]);
-              setZoomLevel(1);
-              zoomLevelRef.current = 1;
-            }
-          }}
-          aria-label="Flip camera"
-          disabled={recording}
         >
           <svg
             width="20"
@@ -696,11 +680,28 @@ export default function GuestEventPage({
             strokeLinejoin="round"
             aria-hidden="true"
           >
-            <path d="M20 7h-3l-2-3H9L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" />
-            <path d="M15 11a3.5 3.5 0 0 1 0 5" />
-            <polyline points="13.7,15 15,16.2 16,14.8" />
-            <path d="M9 16a3.5 3.5 0 0 1 0-5" />
-            <polyline points="10.3,12 9,10.8 8,12.2" />
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <polyline points="9 22 9 12 15 12 15 22" />
+          </svg>
+        </button>
+        <button className="camera-settings-btn" aria-label="Filter settings">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.65"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <circle cx="16" cy="6" r="2" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <circle cx="8" cy="12" r="2" />
+            <line x1="4" y1="18" x2="20" y2="18" />
+            <circle cx="16" cy="18" r="2" />
           </svg>
         </button>
       </div>
@@ -720,77 +721,112 @@ export default function GuestEventPage({
               : {}),
           }}
         />
-        <div className="camera-frame" aria-hidden="true">
-          <div className="camera-frame__corner camera-frame__corner--tl" />
-          <div className="camera-frame__corner camera-frame__corner--tr" />
-          <div className="camera-frame__corner camera-frame__corner--bl" />
-          <div className="camera-frame__corner camera-frame__corner--br" />
-        </div>
+
         {flash && <div className="camera-flash" aria-hidden="true" />}
         {recording && (
           <div className="camera-rec-badge" aria-hidden="true">
             &#9679; REC
           </div>
         )}
-        {showZoomBadge && (
-          <div className="camera-zoom-badge">{zoomLevel.toFixed(1)}×</div>
-        )}
+        <button
+          className="camera-vf-corner-btn camera-vf-corner-btn--left"
+          onClick={() => setFlashEnabled((f) => !f)}
+          aria-label={flashEnabled ? 'Disable flash' : 'Enable flash'}
+        >
+          {flashEnabled ? (
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+          ) : (
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+              <line x1="2" y1="2" x2="22" y2="22" />
+            </svg>
+          )}
+        </button>
+        <div
+          className="camera-vf-corner-btn camera-vf-corner-btn--right"
+          aria-label="Zoom level"
+        >
+          {zoomLevel.toFixed(1)}×
+        </div>
+        <div className="camera-overlay">
+          {/* Photo / Video mode toggle */}
+          {videoEnabled && (
+            <div className="camera-mode-toggle">
+              <button
+                className={`camera-mode-btn${cameraMode === 'photo' ? ' camera-mode-btn--active' : ''}`}
+                onClick={() => {
+                  if (!recording) setCameraMode('photo');
+                }}
+              >
+                Photo
+              </button>
+              <button
+                className={`camera-mode-btn${cameraMode === 'video' ? ' camera-mode-btn--active' : ''}`}
+                onClick={() => {
+                  if (!recording && clipsRemaining > 0) setCameraMode('video');
+                }}
+                disabled={clipsRemaining <= 0}
+              >
+                Video
+              </button>
+            </div>
+          )}
+
+          {/* Lens selector */}
+          {facingMode === 'environment' && rearCameras.length >= 2 && (
+            <div className="camera-lens-selector">
+              {rearCameras.map((cam) => {
+                const isActive =
+                  activeCameraId === cam.deviceId ||
+                  (!activeCameraId && defaultCameraId === cam.deviceId);
+                return (
+                  <button
+                    key={cam.deviceId}
+                    className={`camera-lens-btn${isActive ? ' camera-lens-btn--active' : ''}`}
+                    onClick={() => {
+                      setActiveCameraId(cam.deviceId);
+                      setZoomLevel(1);
+                      zoomLevelRef.current = 1;
+                    }}
+                    disabled={recording}
+                  >
+                    {cam.zoomLabel}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Photo / Video mode toggle */}
-      {videoEnabled && (
-        <div className="camera-mode-toggle">
-          <button
-            className={`camera-mode-btn${cameraMode === 'photo' ? ' camera-mode-btn--active' : ''}`}
-            onClick={() => {
-              if (!recording) setCameraMode('photo');
-            }}
-          >
-            Photo
-          </button>
-          <button
-            className={`camera-mode-btn${cameraMode === 'video' ? ' camera-mode-btn--active' : ''}`}
-            onClick={() => {
-              if (!recording && clipsRemaining > 0) setCameraMode('video');
-            }}
-            disabled={clipsRemaining <= 0}
-          >
-            Video
-          </button>
-        </div>
-      )}
-
-      {/* Lens selector */}
-      {facingMode === 'environment' && rearCameras.length >= 2 && (
-        <div className="camera-lens-selector">
-          {rearCameras.map((cam) => {
-            const isActive =
-              activeCameraId === cam.deviceId ||
-              (!activeCameraId && defaultCameraId === cam.deviceId);
-            return (
-              <button
-                key={cam.deviceId}
-                className={`camera-lens-btn${isActive ? ' camera-lens-btn--active' : ''}`}
-                onClick={() => {
-                  setActiveCameraId(cam.deviceId);
-                  setZoomLevel(1);
-                  zoomLevelRef.current = 1;
-                }}
-                disabled={recording}
-              >
-                {cam.zoomLabel}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="camera-shutter-area">
+      <div className="camera-shutter-section">
         {uploadError && <p className="camera-error">{uploadError}</p>}
 
         {cameraMode === 'photo' ? (
           <button
-            className={`shutter-pill${capturing ? ' shutter-pill--capturing' : ''}`}
+            className={`bg-primary shutter-pill backdrop-blur-xl${capturing ? ' shutter-pill--capturing' : ''}`}
             onClick={handleCapture}
             disabled={capturing || shotsRemaining <= 0}
             aria-label="Take photo"
@@ -846,25 +882,64 @@ export default function GuestEventPage({
       </div>
 
       <div className="camera-nav">
-        <div className="film-counter">
-          <div className="film-counter__dial">
-            <div
-              className="film-counter__ring"
-              style={{ transform: `rotate(${wheelAngle}deg)` }}
-            />
-            <div className="film-counter__face">
-              <span key={counterTick} className="film-counter__num">
-                {cameraMode === 'video' ? clipsRemaining : shotsRemaining}
-              </span>
+        <div className="film-drum">
+          {/* <span className="camera-filter-pill">
+            &#128274; {activeFilter.label}
+          </span> */}
+          <span className="film-drum__icon" aria-hidden="true">
+            🎞
+          </span>
+
+          <div className="film-drum__window">
+            <div className="film-drum__track">
+              <div className="film-drum__slot film-drum__slot--ghost">
+                {filmCount + 1}
+              </div>
+              <div className="film-drum__slot film-drum__slot--center">
+                <span key={counterTick} className="film-drum__num">
+                  {filmCount}
+                </span>
+              </div>
+              <div className="film-drum__slot film-drum__slot--ghost">
+                {filmCount > 0 ? filmCount - 1 : ''}
+              </div>
             </div>
           </div>
-          <span className="film-counter__label">
-            of {cameraMode === 'video' ? clipsPerGuest : shotsPerGuest}
-          </span>
         </div>
-        <span className="camera-filter-pill">
-          &#128274; {activeFilter.label}
-        </span>
+        <button
+          className="camera-flip-btn"
+          onClick={() => {
+            if (!recording) {
+              setFacingMode((f) =>
+                f === 'environment' ? 'user' : 'environment',
+              );
+              setActiveCameraId(undefined);
+              setRearCameras([]);
+              setZoomLevel(1);
+              zoomLevelRef.current = 1;
+            }
+          }}
+          aria-label="Flip camera"
+          disabled={recording}
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.65"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 7h-3l-2-3H9L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" />
+            <path d="M15 11a3.5 3.5 0 0 1 0 5" />
+            <polyline points="13.7,15 15,16.2 16,14.8" />
+            <path d="M9 16a3.5 3.5 0 0 1 0-5" />
+            <polyline points="10.3,12 9,10.8 8,12.2" />
+          </svg>
+        </button>
       </div>
 
       <canvas ref={canvasRef} style={{ display: 'none' }} />
