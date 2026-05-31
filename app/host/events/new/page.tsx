@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { TIERS, getTier } from '@/lib/pricing'
 import { FILTERS } from '@/lib/filters'
 import type { FilterId } from '@/lib/filters'
+import { motion, AnimatePresence } from 'motion/react'
 
 type Step = 1 | 2 | 3
 
@@ -52,8 +53,20 @@ export default function NewEventPage() {
     router.push(`/host/events/${id}`)
   }
 
+  const panelAnim = {
+    initial:    { opacity: 0, x: 24 },
+    animate:    { opacity: 1, x: 0 },
+    exit:       { opacity: 0, x: -24 },
+    transition: { duration: 0.22, ease: [0.25, 0.1, 0.25, 1] as const },
+  }
+
   return (
-    <div className="host-page">
+    <motion.div
+      className="host-page"
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+    >
       <header className="host-header">
         <a className="auth-logo" href="/">Onion</a>
         <a className="btn btn--ghost btn--sm" href="/host/dashboard">← Dashboard</a>
@@ -71,9 +84,10 @@ export default function NewEventPage() {
             ))}
           </div>
 
+          <AnimatePresence mode="wait">
           {/* Step 1 — Guest count + pricing */}
           {step === 1 && (
-            <div className="wizard-panel">
+            <motion.div className="wizard-panel" key="step-1" {...panelAnim}>
               <h2 className="wizard-title">How many guests?</h2>
               <p className="wizard-sub">This determines your pricing tier.</p>
 
@@ -110,12 +124,12 @@ export default function NewEventPage() {
                   Continue →
                 </button>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* Step 2 — Filter selection */}
           {step === 2 && (
-            <div className="wizard-panel">
+            <motion.div className="wizard-panel" key="step-2" {...panelAnim}>
               <h2 className="wizard-title">Choose a filter</h2>
               <p className="wizard-sub">All guests will capture photos with this filter applied.</p>
 
@@ -143,12 +157,12 @@ export default function NewEventPage() {
                 <button className="btn btn--ghost" onClick={() => setStep(1)}>← Back</button>
                 <button className="btn btn--primary" onClick={() => setStep(3)}>Continue →</button>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* Step 3 — Name + shots + review */}
           {step === 3 && (
-            <div className="wizard-panel">
+            <motion.div className="wizard-panel" key="step-3" {...panelAnim}>
               <h2 className="wizard-title">Event details</h2>
 
               <label className="auth-label" style={{ marginBottom: 'var(--sp-4)' }}>
@@ -299,10 +313,11 @@ export default function NewEventPage() {
                   {loading ? 'Creating…' : tier.price === 0 ? 'Create Event — Free' : `Create Event — $${tier.price}`}
                 </button>
               </div>
-            </div>
+            </motion.div>
           )}
+          </AnimatePresence>
         </div>
       </main>
-    </div>
+    </motion.div>
   )
 }

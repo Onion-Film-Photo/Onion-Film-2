@@ -8,10 +8,11 @@ import Comparison from '@/components/Comparison'
 import Pricing from '@/components/Pricing'
 import FooterCta from '@/components/FooterCta'
 import SiteFooter from '@/components/SiteFooter'
+import PageFade from '@/components/PageFade'
 
 export default function Home() {
   return (
-    <>
+    <PageFade>
       <Nav />
       <Hero />
       <Problem />
@@ -22,6 +23,6 @@ export default function Home() {
       <Pricing />
       <FooterCta />
       <SiteFooter />
-    </>
+    </PageFade>
   )
 }

@@ -5,6 +5,7 @@ import { applyFilmGL } from '@/lib/webglFilm'
 import type { FilterId } from '@/lib/filters'
 import type { PhotoVisibility } from '@/lib/visibility'
 import GuestGallery, { type GuestPhoto, type GuestVideo } from './GuestGallery'
+import { motion } from 'motion/react'
 
 type Phase = 'identify' | 'home' | 'camera' | 'error'
 type CameraMode = 'photo' | 'video'
@@ -13,11 +14,12 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
   const { token } = use(params)
 
   // Identity phase
-  const [phase, setPhase]         = useState<Phase>('identify')
-  const [email, setEmail]         = useState('')
-  const [phone, setPhone]         = useState('')
-  const [idError, setIdError]     = useState('')
-  const [idLoading, setIdLoading] = useState(false)
+  const [restoring, setRestoring]  = useState(true)
+  const [phase, setPhase]          = useState<Phase>('identify')
+  const [email, setEmail]          = useState('')
+  const [phone, setPhone]          = useState('')
+  const [idError, setIdError]      = useState('')
+  const [idLoading, setIdLoading]  = useState(false)
 
   // Session
   const [sessionId, setSessionId]           = useState('')
@@ -56,23 +58,72 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
   const [flash, setFlash]             = useState(false)
   const [uploadError, setUploadError] = useState('')
 
+  // Film counter wheel animation
+  const [wheelAngle, setWheelAngle]   = useState(0)
+  const [counterTick, setCounterTick] = useState(0)
+  const prevShotsRef = useRef(-1)
+
+  // Zoom & lens selection
+  const [zoomLevel, setZoomLevel]               = useState(1)
+  const [zoomCapabilities, setZoomCapabilities] = useState<{ min: number; max: number } | null>(null)
+  const [showZoomBadge, setShowZoomBadge]       = useState(false)
+  const [rearCameras, setRearCameras]           = useState<{ deviceId: string; label: string; zoomLabel: string }[]>([])
+  const [activeCameraId, setActiveCameraId]     = useState<string | undefined>(undefined)
+  const [defaultCameraId, setDefaultCameraId]   = useState<string | undefined>(undefined)
+  const viewfinderWrapRef  = useRef<HTMLDivElement>(null)
+  const zoomLevelRef       = useRef(1)
+  const zoomCapRef         = useRef<{ min: number; max: number } | null>(null)
+  const pinchStartDistRef  = useRef<number | null>(null)
+  const pinchStartZoomRef  = useRef(1)
+  const zoomBadgeTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const filter = getFilter(filterId)
 
-  // Start / restart camera when phase or facingMode changes
+  // Start / restart camera when phase, facingMode, or selected lens changes
   useEffect(() => {
     if (phase !== 'camera') return
+    const constraints: MediaStreamConstraints = {
+      video: activeCameraId ? { deviceId: { exact: activeCameraId } } : { facingMode },
+      audio: false,
+    }
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode }, audio: false })
+      .getUserMedia(constraints)
       .then(stream => {
         streamRef.current = stream
         if (videoRef.current) videoRef.current.srcObject = stream
+
+        const track = stream.getVideoTracks()[0]
+        const caps = (track as any).getCapabilities?.() as { zoom?: { min: number; max: number } } | undefined
+        const zoneCaps = caps?.zoom ?? null
+        zoomCapRef.current = zoneCaps
+        setZoomCapabilities(zoneCaps)
+        setZoomLevel(1)
+        zoomLevelRef.current = 1
+
+        if (facingMode === 'environment' && activeCameraId === undefined) {
+          const currentId = track.getSettings().deviceId
+          setDefaultCameraId(currentId)
+          navigator.mediaDevices.enumerateDevices().then(devices => {
+            const rear = devices.filter(d => {
+              if (d.kind !== 'videoinput') return false
+              const lbl = d.label.toLowerCase()
+              return lbl.includes('back') || lbl.includes('rear') ||
+                (!lbl.includes('front') && !lbl.includes('user') && !lbl.includes('face') && !lbl.includes('facetime'))
+            })
+            if (rear.length >= 2) {
+              setRearCameras(rear.map((d, i) => ({
+                deviceId: d.deviceId,
+                label: d.label,
+                zoomLabel: inferZoomLabel(d.label, i, rear.length),
+              })))
+            }
+          })
+        }
       })
       .catch(() => setPhase('error'))
 
-    return () => {
-      streamRef.current?.getTracks().forEach(t => t.stop())
-    }
-  }, [phase, facingMode])
+    return () => { streamRef.current?.getTracks().forEach(t => t.stop()) }
+  }, [phase, facingMode, activeCameraId])
 
   // Poll for photo reveal every 30s while locked
   useEffect(() => {
@@ -80,6 +131,94 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
     const id = setInterval(() => fetchGallery(sessionId), 30_000)
     return () => clearInterval(id)
   }, [isVisible, phase, sessionId])
+
+  // Block viewport pinch-zoom; route viewfinder pinch to camera zoom
+  useEffect(() => {
+    if (phase !== 'camera') return
+
+    const blockViewport = (e: TouchEvent) => { if (e.touches.length > 1) e.preventDefault() }
+    document.addEventListener('touchmove', blockViewport, { passive: false })
+
+    const el = viewfinderWrapRef.current
+    if (!el) return () => document.removeEventListener('touchmove', blockViewport)
+
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      pinchStartDistRef.current = Math.hypot(dx, dy)
+      pinchStartZoomRef.current = zoomLevelRef.current
+    }
+
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || pinchStartDistRef.current === null) return
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      const ratio = Math.hypot(dx, dy) / pinchStartDistRef.current
+      const caps = zoomCapRef.current
+      const newZoom = Math.max(caps?.min ?? 1, Math.min(caps?.max ?? 5, pinchStartZoomRef.current * ratio))
+      applyZoom(newZoom)
+    }
+
+    const onEnd = () => { pinchStartDistRef.current = null }
+
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchmove', onMove, { passive: false })
+    el.addEventListener('touchend', onEnd)
+
+    return () => {
+      document.removeEventListener('touchmove', blockViewport)
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchend', onEnd)
+    }
+  }, [phase])
+
+  // Spin the film counter wheel each time a shot is taken
+  useEffect(() => {
+    if (prevShotsRef.current >= 0 && shotsRemaining < prevShotsRef.current) {
+      setWheelAngle(a => a + 30)
+      setCounterTick(k => k + 1)
+    }
+    prevShotsRef.current = shotsRemaining
+  }, [shotsRemaining])
+
+  // Restore session from localStorage on mount (survives page refresh)
+  useEffect(() => {
+    const stored = localStorage.getItem(`onion_guest_${token}`)
+    if (!stored) { setRestoring(false); return }
+
+    fetch(`/api/guests?token=${token}&sessionId=${stored}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (!data) {
+          localStorage.removeItem(`onion_guest_${token}`)
+          setRestoring(false)
+          return
+        }
+        setSessionId(data.sessionId)
+        setEventId(data.eventId)
+        setFilterId(data.filter as FilterId)
+        setShotsRemaining(data.shotsRemaining)
+        setShotsPerGuest(data.shotsPerGuest)
+        setIsVisible(data.isVisible)
+        setPhotoVisibility(data.photoVisibility)
+        setPhotoVisibleAfter(data.photoVisibleAfter)
+        setVideoEnabled(data.videoEnabled ?? false)
+        setClipsPerGuest(data.clipsPerGuest ?? 2)
+        setClipDurationSeconds(data.clipDurationSeconds ?? 10)
+        setClipsRemaining(data.clipsRemaining ?? 0)
+        setEventEnded(data.eventStatus !== 'active')
+        fetchGallery(data.sessionId)
+        setPhase('home')
+        setRestoring(false)
+      })
+      .catch(() => {
+        localStorage.removeItem(`onion_guest_${token}`)
+        setRestoring(false)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
 
   async function fetchGallery(sid: string) {
     const [photosRes, videosRes] = await Promise.all([
@@ -105,6 +244,30 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
     }
   }
 
+  function inferZoomLabel(label: string, index: number, total: number): string {
+    const l = label.toLowerCase()
+    if (l.includes('ultra wide') || l.includes('0.5')) return '0.5×'
+    if (l.includes('telephoto') || l.includes('tele') || l.includes('2.')) return '2×'
+    if (l.includes('wide') || l.includes('main') || l.includes('1.')) return '1×'
+    if (total === 2) return index === 0 ? '1×' : '2×'
+    if (total === 3) return (['0.5×', '1×', '2×'] as const)[index] ?? `${index + 1}×`
+    return `${index + 1}×`
+  }
+
+  function applyZoom(level: number) {
+    const rounded = Math.round(level * 10) / 10
+    setZoomLevel(rounded)
+    zoomLevelRef.current = rounded
+    if (zoomCapRef.current) {
+      streamRef.current?.getVideoTracks()[0]
+        ?.applyConstraints({ advanced: [{ zoom: rounded } as any] })
+        .catch(() => {})
+    }
+    setShowZoomBadge(true)
+    if (zoomBadgeTimerRef.current) clearTimeout(zoomBadgeTimerRef.current)
+    zoomBadgeTimerRef.current = setTimeout(() => setShowZoomBadge(false), 1200)
+  }
+
   async function handleIdentify(e: React.FormEvent) {
     e.preventDefault()
     setIdLoading(true)
@@ -122,6 +285,8 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
       setIdLoading(false)
       return
     }
+
+    localStorage.setItem(`onion_guest_${token}`, data.sessionId)
 
     setSessionId(data.sessionId)
     setEventId(data.eventId)
@@ -268,10 +433,14 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
     }
   }
 
+  if (restoring) return null
+
   // ── Identify ──────────────────────────────────────────────────────────────
+  const fadeUp = { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.38, ease: [0.25, 0.1, 0.25, 1] as const } }
+
   if (phase === 'identify') {
     return (
-      <div className="guest-identify">
+      <motion.div className="guest-identify" {...fadeUp}>
         <div className="guest-identify__card">
           <a className="auth-logo" href="/">Onion</a>
           <h1 className="guest-identify__title">You&apos;re in.</h1>
@@ -291,14 +460,14 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
             </button>
           </form>
         </div>
-      </div>
+      </motion.div>
     )
   }
 
   // ── Error ─────────────────────────────────────────────────────────────────
   if (phase === 'error') {
     return (
-      <div className="guest-identify">
+      <motion.div className="guest-identify" {...fadeUp}>
         <div className="guest-identify__card">
           <a className="auth-logo" href="/">Onion</a>
           <h1 className="guest-identify__title">Camera unavailable</h1>
@@ -307,14 +476,14 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
             Back to album
           </button>
         </div>
-      </div>
+      </motion.div>
     )
   }
 
   // ── Home / album ──────────────────────────────────────────────────────────
   if (phase === 'home') {
     return (
-      <div className="guest-home">
+      <motion.div className="guest-home" {...fadeUp}>
         <div className="guest-home__header">
           <a className="auth-logo guest-home__logo" href="/">Onion</a>
           <span className="guest-home__album-label">Your Album</span>
@@ -355,7 +524,7 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
             </p>
           )}
         </div>
-      </div>
+      </motion.div>
     )
   }
 
@@ -366,20 +535,34 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
   return (
     <div className="camera-screen">
       <div className="camera-top">
-        <span className="camera-filter-badge">&#128274; {activeFilter.label}</span>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-          <span className="camera-shots">
-            {shotsRemaining} / {shotsPerGuest} <span className="camera-shots__label">left</span>
-          </span>
-          {videoEnabled && cameraMode === 'video' && (
-            <span className="camera-shots" style={{ fontSize: '0.75rem' }}>
-              {clipsRemaining} / {clipsPerGuest} <span className="camera-shots__label">clips</span>
-            </span>
-          )}
-        </div>
+        <button className="camera-back-btn" onClick={() => { stopRecording(); setPhase('home') }} aria-label="Back to album">
+          &#8592; Back
+        </button>
+        <button
+          className="camera-flip-btn"
+          onClick={() => {
+            if (!recording) {
+              setFacingMode(f => f === 'environment' ? 'user' : 'environment')
+              setActiveCameraId(undefined)
+              setRearCameras([])
+              setZoomLevel(1)
+              zoomLevelRef.current = 1
+            }
+          }}
+          aria-label="Flip camera"
+          disabled={recording}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M20 7h-3l-2-3H9L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" />
+            <path d="M15 11a3.5 3.5 0 0 1 0 5" />
+            <polyline points="13.7,15 15,16.2 16,14.8" />
+            <path d="M9 16a3.5 3.5 0 0 1 0-5" />
+            <polyline points="10.3,12 9,10.8 8,12.2" />
+          </svg>
+        </button>
       </div>
 
-      <div className="camera-viewfinder-wrap">
+      <div className="camera-viewfinder-wrap" ref={viewfinderWrapRef}>
         <div className="camera-grain" aria-hidden="true" />
         <video
           ref={videoRef}
@@ -387,7 +570,10 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
           playsInline
           muted
           className="camera-video"
-          style={{ filter: viewfinderCss }}
+          style={{
+            filter: viewfinderCss,
+            ...(!zoomCapabilities && zoomLevel !== 1 ? { transform: `scale(${zoomLevel})`, transformOrigin: 'center' } : {}),
+          }}
         />
         <div className="camera-frame" aria-hidden="true">
           <div className="camera-frame__corner camera-frame__corner--tl" />
@@ -397,6 +583,9 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
         </div>
         {flash && <div className="camera-flash" aria-hidden="true" />}
         {recording && <div className="camera-rec-badge" aria-hidden="true">&#9679; REC</div>}
+        {showZoomBadge && (
+          <div className="camera-zoom-badge">{zoomLevel.toFixed(1)}×</div>
+        )}
       </div>
 
       {/* Photo / Video mode toggle */}
@@ -418,6 +607,30 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
         </div>
       )}
 
+      {/* Lens selector */}
+      {facingMode === 'environment' && rearCameras.length >= 2 && (
+        <div className="camera-lens-selector">
+          {rearCameras.map(cam => {
+            const isActive = activeCameraId === cam.deviceId ||
+              (!activeCameraId && defaultCameraId === cam.deviceId)
+            return (
+              <button
+                key={cam.deviceId}
+                className={`camera-lens-btn${isActive ? ' camera-lens-btn--active' : ''}`}
+                onClick={() => {
+                  setActiveCameraId(cam.deviceId)
+                  setZoomLevel(1)
+                  zoomLevelRef.current = 1
+                }}
+                disabled={recording}
+              >
+                {cam.zoomLabel}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       <div className="camera-shutter-area">
         {uploadError && <p className="camera-error">{uploadError}</p>}
 
@@ -428,6 +641,20 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
             disabled={capturing || shotsRemaining <= 0}
             aria-label="Take photo"
           >
+            {!capturing && (
+              <motion.span
+                className="shutter-shimmer"
+                initial={{ x: '-70%' }}
+                animate={{ x: '170%' }}
+                transition={{
+                  duration: 0.5,
+                  ease: 'easeInOut',
+                  repeat: Infinity,
+                  repeatType: 'loop',
+                  repeatDelay: 2.5,
+                }}
+              />
+            )}
             <span className="shutter-pill__dot" />
           </button>
         ) : (
@@ -452,17 +679,23 @@ export default function GuestEventPage({ params }: { params: Promise<{ token: st
       </div>
 
       <div className="camera-nav">
-        <button className="camera-nav__btn" onClick={() => { stopRecording(); setPhase('home') }} aria-label="Back to album">
-          &#8592;
-        </button>
+        <div className="film-counter">
+          <div className="film-counter__dial">
+            <div
+              className="film-counter__ring"
+              style={{ transform: `rotate(${wheelAngle}deg)` }}
+            />
+            <div className="film-counter__face">
+              <span key={counterTick} className="film-counter__num">
+                {cameraMode === 'video' ? clipsRemaining : shotsRemaining}
+              </span>
+            </div>
+          </div>
+          <span className="film-counter__label">
+            of {cameraMode === 'video' ? clipsPerGuest : shotsPerGuest}
+          </span>
+        </div>
         <span className="camera-filter-pill">&#128274; {activeFilter.label}</span>
-        <button
-          className="camera-nav__btn"
-          onClick={() => { if (!recording) setFacingMode(f => f === 'environment' ? 'user' : 'environment') }}
-          aria-label="Flip camera"
-        >
-          &#8635;
-        </button>
       </div>
 
       <canvas ref={canvasRef} style={{ display: 'none' }} />

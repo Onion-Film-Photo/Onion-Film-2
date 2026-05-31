@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase/client'
 import { getTier } from '@/lib/pricing'
 import { getFilter } from '@/lib/filters'
 import type { FilterId } from '@/lib/filters'
+import { motion } from 'motion/react'
 
 type Event = {
   id: string
@@ -38,7 +39,12 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="host-page">
+    <motion.div
+      className="host-page"
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+    >
       <header className="host-header">
         <a className="auth-logo" href="/">Onion</a>
         <div className="host-header__actions">
@@ -62,13 +68,20 @@ export default function DashboardPage() {
 
           {!loading && events.length > 0 && (
             <div className="event-grid">
-              {events.map(ev => {
+              {events.map((ev, i) => {
                 const tier   = getTier(ev.guest_limit)
                 const filter = getFilter(ev.filter as FilterId)
                 const guests = ev.guest_sessions?.[0]?.count ?? 0
                 const photos = ev.photos?.[0]?.count ?? 0
                 return (
-                  <a key={ev.id} className="event-card" href={`/host/events/${ev.id}`}>
+                  <motion.a
+                    key={ev.id}
+                    className="event-card"
+                    href={`/host/events/${ev.id}`}
+                    initial={{ opacity: 0, y: 18 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.35, delay: i * 0.07, ease: [0.25, 0.1, 0.25, 1] }}
+                  >
                     <div className="event-card__header">
                       <span className="event-card__name">{ev.name}</span>
                       <span className={`event-card__status event-card__status--${ev.status}`}>
@@ -96,13 +109,13 @@ export default function DashboardPage() {
                         <span className="event-stat__label">{tier.label}</span>
                       </div>
                     </div>
-                  </a>
+                  </motion.a>
                 )
               })}
             </div>
           )}
         </div>
       </main>
-    </div>
+    </motion.div>
   )
 }

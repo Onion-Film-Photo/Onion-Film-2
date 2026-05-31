@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { motion } from 'motion/react'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -26,24 +27,26 @@ export default function SignupPage() {
     setDone(true)
   }
 
+  const cardAnim = { initial: { opacity: 0, y: 24 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.4, ease: [0.25, 0.1, 0.25, 1] as const } }
+
   if (done) {
     return (
       <div className="auth-page">
-        <div className="auth-card">
+        <motion.div className="auth-card" {...cardAnim}>
           <a className="auth-logo" href="/">Onion</a>
           <h1 className="auth-title">Check your email</h1>
           <p className="auth-sub">
             We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account, then sign in.
           </p>
           <a className="btn btn--outline btn--full" href="/host/login" style={{ marginTop: 'var(--sp-4)' }}>Go to Sign In</a>
-        </div>
+        </motion.div>
       </div>
     )
   }
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
+      <motion.div className="auth-card" {...cardAnim}>
         <a className="auth-logo" href="/">Onion</a>
         <h1 className="auth-title">Create your account</h1>
         <p className="auth-sub">Start documenting events with intention.</p>
@@ -89,7 +92,7 @@ export default function SignupPage() {
         <p className="auth-switch">
           Have an account? <a href="/host/login">Sign in →</a>
         </p>
-      </div>
+      </motion.div>
     </div>
   )
 }

@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { motion } from 'motion/react'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -23,7 +24,12 @@ export default function LoginPage() {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
+      <motion.div
+        className="auth-card"
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+      >
         <a className="auth-logo" href="/">Onion</a>
         <h1 className="auth-title">Welcome back</h1>
         <p className="auth-sub">Sign in to manage your events.</p>
@@ -58,7 +64,7 @@ export default function LoginPage() {
         <p className="auth-switch">
           No account? <a href="/host/signup">Create one →</a>
         </p>
-      </div>
+      </motion.div>
     </div>
   )
 }

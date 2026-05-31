@@ -5,6 +5,7 @@ import { zipSync } from 'fflate'
 import { getTier } from '@/lib/pricing'
 import { getFilter } from '@/lib/filters'
 import type { FilterId } from '@/lib/filters'
+import { motion } from 'motion/react'
 
 type GuestSession = {
   id: string
@@ -134,7 +135,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const guestUrl      = `${appUrl}/event/${event.qr_token}`
 
   return (
-    <div className="host-page">
+    <motion.div
+      className="host-page"
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+    >
       <header className="host-header">
         <a className="auth-logo" href="/">Onion</a>
         <a className="btn btn--ghost btn--sm" href="/host/dashboard">← Dashboard</a>
@@ -320,6 +326,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           )}
         </div>
       </main>
-    </div>
+    </motion.div>
   )
 }
