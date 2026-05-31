@@ -36,7 +36,7 @@ export default function GuestGallery({
   if (!isVisible) {
     if (photoVisibility === 'after_event') {
       lockMessage =
-        'The host have decided to reveal Photos & clips when the event ends';
+        'The host have decided to reveal photos & clips when the event ends';
     } else if (photoVisibility === 'after_date' && photoVisibleAfter) {
       const date = new Date(photoVisibleAfter);
       lockMessage = `Photos & clips revealed on ${date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`;
@@ -63,7 +63,7 @@ export default function GuestGallery({
     <section className="guest-gallery">
       <div className="guest-gallery__header">
         <span className="guest-gallery__count">
-          {photos.length} {photos.length === 1 ? 'shot' : 'shots'}
+          {photos.length} {photos.length === 1 ? 'shot' : 'shots'} taken
           {videos.length > 0 &&
             ` · ${videos.length} ${videos.length === 1 ? 'clip' : 'clips'}`}
         </span>
