@@ -1,7 +1,6 @@
 'use client'
 import { useRef, useEffect } from 'react'
 import { motion, useInView } from 'motion/react'
-import SprocketStrip from './SprocketStrip'
 
 const ease: [number, number, number, number] = [0.16, 1, 0.3, 1]
 
@@ -48,15 +47,23 @@ export default function UseCases() {
   return (
     <section className="usecases" ref={sectionRef}>
       <div className="section-container">
-        <motion.p className="eyebrow" initial={{ opacity: 0, y: 32 }} animate={sectionInView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.8, ease }}>
+        <motion.p
+          className="eyebrow"
+          initial={{ opacity: 0, y: 16 }}
+          animate={sectionInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.7, ease }}
+        >
           Perfect for
         </motion.p>
-        <motion.h2 initial={{ opacity: 0, y: 32 }} animate={sectionInView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.8, ease, delay: 0.12 }}>
+        <motion.h2
+          initial={{ opacity: 0, y: 16 }}
+          animate={sectionInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.7, ease, delay: 0.1 }}
+        >
           Any event worth remembering.
         </motion.h2>
       </div>
       <div className="filmstrip-outer">
-        <SprocketStrip id="sprockets-film-top" className="filmstrip-top-strip" />
         <div className="filmstrip-scroll" id="filmstrip" ref={filmRef}>
           <div className="filmstrip__track">
             {frames.map(f => (
@@ -70,7 +77,6 @@ export default function UseCases() {
             ))}
           </div>
         </div>
-        <SprocketStrip id="sprockets-film-bottom" className="filmstrip-bottom-strip" />
       </div>
     </section>
   )

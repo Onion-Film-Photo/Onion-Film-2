@@ -1,66 +1,43 @@
 'use client';
-import { useRef } from 'react';
-import { motion, useScroll, useTransform } from 'motion/react';
-import SprocketStrip from './SprocketStrip';
+import { motion } from 'motion/react';
 
 const ease: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
-const container = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.13, delayChildren: 0.35 } },
-};
-const item = {
-  hidden: { opacity: 0, y: 36 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.9, ease } },
-};
+const fadeUp = (delay: number) => ({
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.7, ease, delay },
+});
 
 export default function Hero() {
-  const heroRef = useRef<HTMLElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: heroRef,
-    offset: ['start start', 'end start'],
-  });
-  const y = useTransform(scrollYProgress, [0, 1], [0, 90]);
-
   return (
-    <section className="hero" id="hero" ref={heroRef}>
-      <SprocketStrip
-        id="sprockets-top"
-        className="hero__strip hero__strip--top sprocket-strip"
-      />
-      <motion.div className="hero__content" ref={contentRef} style={{ y }}>
-        <motion.div variants={container} initial="hidden" animate="show">
-          <motion.p className="hero__eyebrow" variants={item}>
-            Disposable camera · Intentional coverage
-          </motion.p>
-          <motion.h1 className="hero__headline" variants={item}>
-            Your guests captured 300 photos.
-            <br />
-            <em>You saw 12.</em>
-          </motion.h1>
-          <motion.p className="hero__sub" variants={item}>
-            Onion assigns every guest a role before your event begins. No moment
-            goes undocumented. No moment is left to chance.
-          </motion.p>
-          <motion.div className="hero__ctas" variants={item}>
-            <a className="btn btn--primary" href="/host/signup">
-              Create Your Event
-            </a>
-            <a className="btn btn--ghost" href="#how-it-works">
-              See How It Works
-            </a>
-          </motion.div>
-          <motion.p className="hero__footnote" variants={item}>
-            Free to start &nbsp;·&nbsp; No app download for guests &nbsp;·&nbsp;
-            Takes 3 minutes
-          </motion.p>
+    <section className="hero" id="hero">
+      <div className="hero__content">
+        <motion.p className="hero__eyebrow" {...fadeUp(0.2)}>
+          Disposable camera · Intentional coverage
+        </motion.p>
+        <motion.h1 className="hero__headline" {...fadeUp(0.3)}>
+          Your guests captured 300 photos.
+          <br />
+          <em>You saw 12.</em>
+        </motion.h1>
+        <motion.p className="hero__sub" {...fadeUp(0.4)}>
+          Onion assigns every guest a role before your event begins. No moment
+          goes undocumented. No moment is left to chance.
+        </motion.p>
+        <motion.div className="hero__ctas" {...fadeUp(0.5)}>
+          <a className="btn btn--primary" href="/host/signup">
+            Create Your Event
+          </a>
+          <a className="btn btn--ghost" href="#how-it-works">
+            See How It Works
+          </a>
         </motion.div>
-      </motion.div>
-      <SprocketStrip
-        id="sprockets-bottom"
-        className="hero__strip hero__strip--bottom sprocket-strip"
-      />
+        <motion.p className="hero__footnote" {...fadeUp(0.6)}>
+          Free to start &nbsp;·&nbsp; No app download for guests &nbsp;·&nbsp;
+          Takes 3 minutes
+        </motion.p>
+      </div>
     </section>
   );
 }

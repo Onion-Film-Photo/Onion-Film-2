@@ -32,30 +32,37 @@ export default function Pricing() {
   return (
     <section className="pricing" id="pricing" ref={sectionRef}>
       <div className="section-container">
-        <motion.p className="eyebrow" initial={{ opacity: 0, y: 32 }} animate={sectionInView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.8, ease }}>
+        <motion.p
+          className="eyebrow"
+          initial={{ opacity: 0, y: 16 }}
+          animate={sectionInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.7, ease }}
+        >
           Simple pricing
         </motion.p>
-        <motion.h2 initial={{ opacity: 0, y: 32 }} animate={sectionInView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.8, ease, delay: 0.12 }}>
+        <motion.h2
+          initial={{ opacity: 0, y: 16 }}
+          animate={sectionInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.7, ease, delay: 0.1 }}
+        >
           One event. One price.<br />No subscriptions.
         </motion.h2>
-        <motion.p className="pricing__sub" initial={{ opacity: 0, y: 32 }} animate={sectionInView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.8, ease, delay: 0.24 }}>
+        <motion.p
+          className="pricing__sub"
+          initial={{ opacity: 0, y: 16 }}
+          animate={sectionInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.7, ease, delay: 0.18 }}
+        >
           Pay once per event. Keep your photos forever.
         </motion.p>
-        <motion.div
-          ref={gridRef}
-          className="tier-grid"
-          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.12 } } }}
-          initial="hidden"
-          animate={gridInView ? 'show' : 'hidden'}
-        >
-          {tiers.map(t => (
+        <div ref={gridRef} className="tier-grid">
+          {tiers.map((t, i) => (
             <motion.div
               key={t.name}
               className={`tier${t.featured ? ' tier--featured' : ''}`}
-              variants={{
-                hidden: { opacity: 0, y: 64 },
-                show: { opacity: 1, y: 0, transition: { duration: 0.9, ease } },
-              }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={gridInView ? { opacity: 1, y: 0 } : {}}
+              transition={{ duration: 0.7, ease, delay: i * 0.08 }}
             >
               {t.badge && <p className="tier__badge">{t.badge}</p>}
               <p className="tier__name">{t.name}</p>
@@ -67,7 +74,7 @@ export default function Pricing() {
               <a className={`btn ${t.cta.style} btn--full`} href="/host/signup">{t.cta.label}</a>
             </motion.div>
           ))}
-        </motion.div>
+        </div>
       </div>
     </section>
   )

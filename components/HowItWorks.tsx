@@ -54,41 +54,34 @@ export default function HowItWorks() {
       <div className="section-container">
         <motion.p
           className="eyebrow"
-          initial={{ opacity: 0, y: 32 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={sectionInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.8, ease }}
+          transition={{ duration: 0.7, ease }}
         >
           The process
         </motion.p>
         <motion.h2
-          initial={{ opacity: 0, y: 32 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={sectionInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.8, ease, delay: 0.12 }}
+          transition={{ duration: 0.7, ease, delay: 0.1 }}
         >
           From planning to reveal —<br />in four steps.
         </motion.h2>
-        <motion.div
-          ref={stepsRef}
-          className="steps"
-          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.1 } } }}
-          initial="hidden"
-          animate={stepsInView ? 'show' : 'hidden'}
-        >
-          {steps.map(s => (
+        <div ref={stepsRef} className="steps">
+          {steps.map((s, i) => (
             <motion.div
               key={s.title}
               className="step"
-              variants={{
-                hidden: { opacity: 0, y: 56 },
-                show: { opacity: 1, y: 0, transition: { duration: 0.85, ease } },
-              }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={stepsInView ? { opacity: 1, y: 0 } : {}}
+              transition={{ duration: 0.7, ease, delay: i * 0.08 }}
             >
               <div className="step__icon">{s.icon}</div>
               <h3>{s.title}</h3>
               <p>{s.body}</p>
             </motion.div>
           ))}
-        </motion.div>
+        </div>
       </div>
     </section>
   )

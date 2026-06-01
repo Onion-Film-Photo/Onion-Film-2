@@ -24,19 +24,28 @@ export default function Comparison() {
   return (
     <section className="comparison" ref={sectionRef}>
       <div className="section-container">
-        <motion.p className="eyebrow" initial={{ opacity: 0, y: 32 }} animate={sectionInView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.8, ease }}>
+        <motion.p
+          className="eyebrow"
+          initial={{ opacity: 0, y: 16 }}
+          animate={sectionInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.7, ease }}
+        >
           Why Onion
         </motion.p>
-        <motion.h2 initial={{ opacity: 0, y: 32 }} animate={sectionInView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.8, ease, delay: 0.12 }}>
+        <motion.h2
+          initial={{ opacity: 0, y: 16 }}
+          animate={sectionInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.7, ease, delay: 0.1 }}
+        >
           Everything they offer.<br />And one thing they don&apos;t.
         </motion.h2>
         <motion.div
           ref={tableRef}
           className="table-wrap"
           style={{ marginTop: 'var(--sp-8)' }}
-          initial={{ opacity: 0, y: 40, scale: 0.97 }}
-          animate={tableInView ? { opacity: 1, y: 0, scale: 1 } : {}}
-          transition={{ duration: 0.9, ease }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={tableInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.7, ease }}
         >
           <table className="compare-table">
             <thead>

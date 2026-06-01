@@ -4,7 +4,6 @@ import { motion, AnimatePresence, useInView } from 'motion/react'
 
 const ease: [number, number, number, number] = [0.16, 1, 0.3, 1]
 
-// Demo state 0 content
 function DemoAssign() {
   const guests = [
     { num: '+1 555 0142', role: "Bride's Parents", active: false },
@@ -28,7 +27,6 @@ function DemoAssign() {
   )
 }
 
-// Demo state 1 content
 function DemoQR() {
   return (
     <>
@@ -69,7 +67,6 @@ function DemoQR() {
   )
 }
 
-// Demo state 2 content
 function DemoReveal() {
   return (
     <>
@@ -126,9 +123,9 @@ export default function Roles() {
         <motion.div
           ref={headerRef}
           className="roles__header"
-          initial={{ opacity: 0, y: 40 }}
+          initial={{ opacity: 0, y: 20 }}
           animate={headerInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.9, ease }}
+          transition={{ duration: 0.7, ease }}
         >
           <p className="eyebrow">The Onion Difference</p>
           <h2>Everyone arrives with a purpose.</h2>
@@ -139,19 +136,19 @@ export default function Roles() {
           <motion.div
             ref={phoneRef}
             className="phone-mockup"
-            initial={{ opacity: 0, x: -52 }}
-            animate={phoneInView ? { opacity: 1, x: 0 } : {}}
-            transition={{ duration: 1.0, ease }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={phoneInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.7, ease }}
           >
             <div className="phone-mockup__screen">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={current}
                   style={{ position: 'absolute', inset: 'var(--sp-3) var(--sp-2)', display: 'flex', flexDirection: 'column' }}
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.4, ease }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.35, ease }}
                 >
                   {demoStates[current]}
                 </motion.div>
@@ -169,28 +166,21 @@ export default function Roles() {
             </div>
           </motion.div>
 
-          <motion.div
-            ref={calloutsRef}
-            className="roles__callouts"
-            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.13 } } }}
-            initial="hidden"
-            animate={calloutsInView ? 'show' : 'hidden'}
-          >
-            {callouts.map(c => (
+          <div ref={calloutsRef} className="roles__callouts">
+            {callouts.map((c, i) => (
               <motion.div
                 key={c.num}
                 className="callout"
-                variants={{
-                  hidden: { opacity: 0, x: 52 },
-                  show: { opacity: 1, x: 0, transition: { duration: 0.85, ease } },
-                }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={calloutsInView ? { opacity: 1, y: 0 } : {}}
+                transition={{ duration: 0.7, ease, delay: i * 0.1 }}
               >
                 <span className="callout__num">{c.num}</span>
                 <h3>{c.title}</h3>
                 <p>{c.body}</p>
               </motion.div>
             ))}
-          </motion.div>
+          </div>
         </div>
       </div>
     </section>
