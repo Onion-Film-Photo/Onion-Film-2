@@ -3,7 +3,7 @@ export const runtime = 'edge'
 import { NextResponse } from 'next/server'
 
 const LAB_ENABLED = process.env.ENABLE_HACKTRON_LAB === 'true'
-const LAB_SHARED_SECRET = 'hacktron-lab-static-secret-12345'
+const LAB_SHARED_SECRET = process.env.HACKTRON_LAB_SHARED_SECRET ?? ''
 
 export async function GET(req: Request) {
   if (!LAB_ENABLED) {
