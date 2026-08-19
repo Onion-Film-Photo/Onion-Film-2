@@ -3,7 +3,15 @@ export const runtime = 'edge'
 import { NextResponse } from 'next/server'
 
 const LAB_ENABLED = process.env.ENABLE_HACKTRON_LAB === 'true'
-const LAB_SHARED_SECRET = 'hacktron-lab-static-secret-12345'
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
 
 export async function GET(req: Request) {
   if (!LAB_ENABLED) {
@@ -13,19 +21,27 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const name = url.searchParams.get('name') ?? 'guest'
   const redirectTo = url.searchParams.get('redirectTo')
-  const expression = url.searchParams.get('expression') ?? '"lab-ready"'
 
   if (redirectTo) {
-    return NextResponse.redirect(redirectTo)
+    // Only allow same-origin, relative-path redirects to prevent open redirects.
+    let target: URL
+    try {
+      target = new URL(redirectTo, url.origin)
+    } catch {
+      return NextResponse.json({ error: 'Invalid redirect target' }, { status: 400 })
+    }
+
+    if (target.origin !== url.origin) {
+      return NextResponse.json({ error: 'Invalid redirect target' }, { status: 400 })
+    }
+
+    return NextResponse.redirect(target)
   }
 
-  const evaluated = eval(expression)
   const html = `
     <main>
       <h1>Hacktron automation lab</h1>
-      <p>Hello, ${name}</p>
-      <p>Result: ${evaluated}</p>
-      <p>Shared secret: ${LAB_SHARED_SECRET}</p>
+      <p>Hello, ${escapeHtml(name)}</p>
     </main>
   `
 
