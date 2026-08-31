@@ -20,6 +20,7 @@ export default function NewEventPage() {
   const [clipDuration, setClipDuration] = useState<5 | 10 | 15>(10)
   const [photoVisibility, setPhotoVisibility] = useState<'after_event' | 'immediately' | 'after_date'>('after_event')
   const [photoVisibleAfter, setPhotoVisibleAfter] = useState('')
+  const [webhookUrl, setWebhookUrl] = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
@@ -41,6 +42,7 @@ export default function NewEventPage() {
         clip_duration_seconds: clipDuration,
         photo_visibility:      photoVisibility,
         photo_visible_after:   photoVisibility === 'after_date' && photoVisibleAfter ? photoVisibleAfter : null,
+        webhook_url:           webhookUrl.trim() || null,
       }),
     })
     if (!res.ok) {
@@ -266,6 +268,21 @@ export default function NewEventPage() {
                   />
                 )}
               </div>
+
+              {/* Webhook notifications */}
+              <label className="auth-label" style={{ marginBottom: 'var(--sp-6)' }}>
+                Webhook URL <span className="auth-label-hint">optional</span>
+                <input
+                  className="auth-input"
+                  type="url"
+                  placeholder="https://your-app.com/webhooks/onion"
+                  value={webhookUrl}
+                  onChange={e => setWebhookUrl(e.target.value)}
+                />
+                <span style={{ display: 'block', marginTop: 'var(--sp-1)', fontSize: '0.8em', color: 'var(--c-text-2)' }}>
+                  We&apos;ll POST guest details here as soon as someone joins your event.
+                </span>
+              </label>
 
               {/* Summary card */}
               <div className="review-card">

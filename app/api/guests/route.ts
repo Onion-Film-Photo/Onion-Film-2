@@ -23,6 +23,7 @@ type EventRow = {
   video_enabled: boolean
   clips_per_guest: number
   clip_duration_seconds: number
+  webhook_url: string | null
 }
 
 // Restore an existing guest session by sessionId (used after page refresh)
@@ -44,7 +45,7 @@ export async function GET(req: Request) {
   {
     const { data, error } = await serviceClient
       .from('events')
-      .select('id, guest_limit, shots_per_guest, filter, status, photo_visibility, photo_visible_after, video_enabled, clips_per_guest, clip_duration_seconds')
+      .select('id, guest_limit, shots_per_guest, filter, status, photo_visibility, photo_visible_after, video_enabled, clips_per_guest, clip_duration_seconds, webhook_url')
       .eq('qr_token', token)
       .single()
 
@@ -55,7 +56,7 @@ export async function GET(req: Request) {
         .eq('qr_token', token)
         .single()
       if (fbErr || !fb) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
-      event = { ...fb, photo_visibility: 'after_event', photo_visible_after: null, video_enabled: false, clips_per_guest: 0, clip_duration_seconds: 10 } as EventRow
+      event = { ...fb, photo_visibility: 'after_event', photo_visible_after: null, video_enabled: false, clips_per_guest: 0, clip_duration_seconds: 10, webhook_url: null } as EventRow
     } else if (error || !data) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 })
     } else {
@@ -118,7 +119,7 @@ export async function POST(req: Request) {
   {
     const { data, error } = await serviceClient
       .from('events')
-      .select('id, guest_limit, shots_per_guest, filter, status, photo_visibility, photo_visible_after, video_enabled, clips_per_guest, clip_duration_seconds')
+      .select('id, guest_limit, shots_per_guest, filter, status, photo_visibility, photo_visible_after, video_enabled, clips_per_guest, clip_duration_seconds, webhook_url')
       .eq('qr_token', event_token)
       .single()
 
@@ -130,7 +131,7 @@ export async function POST(req: Request) {
         .eq('qr_token', event_token)
         .single()
       if (fbErr || !fb) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
-      event = { ...fb, photo_visibility: 'after_event', photo_visible_after: null } as EventRow
+      event = { ...fb, photo_visibility: 'after_event', photo_visible_after: null, webhook_url: null } as EventRow
     } else if (error || !data) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 })
     } else {
@@ -221,6 +222,16 @@ export async function POST(req: Request) {
     }
 
     session = newSession
+
+    if (event.webhook_url) {
+      try {
+        await fetch(event.webhook_url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'guest.joined', eventId: event.id, email, phone, joinedAt: new Date().toISOString() }),
+        })
+      } catch {}
+    }
   }
 
   const isVisible = computeVisibility(event)

@@ -16,6 +16,7 @@ const schema = z.object({
   clip_duration_seconds: z.union([z.literal(5), z.literal(10), z.literal(15)]).default(10),
   photo_visibility:      z.enum(['after_event', 'immediately', 'after_date']).default('after_event'),
   photo_visible_after:   z.string().nullable().optional(),
+  webhook_url:           z.string().url().nullable().optional(),
 })
 
 export async function POST(req: Request) {
