@@ -229,7 +229,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
           {/* Guest list */}
           <div className="event-panel" style={{ marginTop: 'var(--sp-6)' }}>
-            <h2 className="event-panel__title">Guests ({guests})</h2>
+            <div className="event-panel__header">
+              <h2 className="event-panel__title">Guests ({guests})</h2>
+              {guestSessions.length > 0 && (
+                <a className="btn btn--outline btn--sm" href={`/api/events/${id}/guests/export`}>
+                  Export CSV
+                </a>
+              )}
+            </div>
             {guestSessions.length === 0 ? (
               <p className="host-empty">No guests yet — they'll appear here when they scan in.</p>
             ) : (
