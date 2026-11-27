@@ -1,0 +1,8 @@
+[
+  {
+    "id": "demo-1",
+    "displayName": "Sample One",
+    "sessionCredential": "EXAMPLE-ONLY-ALPHA",
+    "recoveryCode": "EXAMPLE-ONLY-BETA"
+  }
+]
